@@ -1,350 +1,455 @@
 import { useState } from 'react';
-import { FileBarChart, Download, Calendar, Filter } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, MapPin, Target, Download } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInventoryContext } from '@/contexts/InventoryContext';
-import { Button } from '@/components/ui/button';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { MovementType, MovementPurpose } from '@/types/inventory';
+import { Button } from '@/components/ui/button';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell,
+} from 'recharts';
+
+const COLORS = [
+  'hsl(220, 70%, 45%)', 'hsl(35, 90%, 50%)', 'hsl(142, 70%, 40%)',
+  'hsl(0, 72%, 51%)', 'hsl(200, 80%, 50%)', 'hsl(280, 65%, 55%)',
+  'hsl(160, 60%, 45%)', 'hsl(45, 85%, 55%)',
+];
+
+const ABC_COLORS = { A: 'hsl(142, 70%, 40%)', B: 'hsl(35, 90%, 50%)', C: 'hsl(220, 70%, 45%)' };
 
 export default function Relatorios() {
-  const { movements, products, getFilteredMovements, collaborators } = useInventoryContext();
-  
-  const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
-    type: 'all' as string,
-    collaborator: 'all' as string,
-    purpose: 'all' as string,
-  });
-
-  const filteredMovements = getFilteredMovements({
-    startDate: filters.startDate || undefined,
-    endDate: filters.endDate || undefined,
-    type: filters.type !== 'all' ? filters.type as MovementType : undefined,
-    collaborator: filters.collaborator !== 'all' ? filters.collaborator : undefined,
-    purpose: filters.purpose !== 'all' ? filters.purpose as MovementPurpose : undefined,
-  });
-
-  // Group movements by collaborator
-  const movementsByCollaborator = movements.reduce((acc, m) => {
-    if (!acc[m.collaborator]) {
-      acc[m.collaborator] = { total: 0, entradas: 0, saidas: 0 };
-    }
-    acc[m.collaborator].total++;
-    if (m.type === 'ENTRADA') acc[m.collaborator].entradas++;
-    if (m.type === 'SAIDA') acc[m.collaborator].saidas++;
-    return acc;
-  }, {} as Record<string, { total: number; entradas: number; saidas: number }>);
-
-  // Group movements by purpose
-  const movementsByPurpose = movements.reduce((acc, m) => {
-    if (!acc[m.purpose]) acc[m.purpose] = 0;
-    acc[m.purpose]++;
-    return acc;
-  }, {} as Record<string, number>);
-
-  // Top products by movement count
-  const productMovementCounts = movements.reduce((acc, m) => {
-    if (!acc[m.productCode]) {
-      acc[m.productCode] = { code: m.productCode, description: m.productDescription, count: 0 };
-    }
-    acc[m.productCode].count++;
-    return acc;
-  }, {} as Record<string, { code: string; description: string; count: number }>);
-
-  const topProducts = Object.values(productMovementCounts)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+  const { movements, products, collaborators } = useInventoryContext();
+  const { abcAnalysis, collaboratorKPIs, purposeAnalysis, locationHeatData } = useAnalytics(products, movements);
 
   const exportToCSV = () => {
-    const headers = ['Data', 'Hora', 'Tipo', 'Código', 'Produto', 'Qtd', 'Origem', 'Destino', 'Finalidade', 'Colaborador'];
-    const rows = filteredMovements.map(m => [
-      m.date,
-      m.time,
-      m.type,
-      m.productCode,
-      m.productDescription,
-      m.quantity,
-      m.origin,
-      m.destination,
-      m.purpose,
-      m.collaborator,
+    const headers = ['Data', 'Hora', 'Tipo', 'Código', 'Produto', 'Qtd', 'Origem', 'Destino', 'Finalidade', 'Projeto', 'Colaborador'];
+    const rows = movements.map(m => [
+      m.date, m.time, m.type, m.productCode, m.productDescription,
+      m.quantity, m.origin, m.destination, m.purpose, m.projectCode || '', m.collaborator,
     ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(',')),
-    ].join('\n');
-
+    const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `relatorio_movimentacoes_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `relatorio_estoque_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
+  // ABC chart data
+  const abcChartData = abcAnalysis.slice(0, 20).map(item => ({
+    name: item.product.code,
+    quantidade: item.totalQuantity,
+    acumulado: item.cumulativePercentage,
+    curve: item.curve,
+  }));
+
+  // ABC summary
+  const abcSummary = {
+    A: abcAnalysis.filter(a => a.curve === 'A'),
+    B: abcAnalysis.filter(a => a.curve === 'B'),
+    C: abcAnalysis.filter(a => a.curve === 'C'),
+  };
+
+  // Collaborator chart data
+  const collabChartData = collaboratorKPIs.map(k => ({
+    name: k.name,
+    movimentacoes: k.totalMovements,
+    quantidade: k.totalQuantity,
+  }));
+
+  // Purpose pie data
+  const purposeChartData = purposeAnalysis.map(p => ({
+    name: p.projectCode || p.purpose,
+    value: p.totalMovements,
+  }));
+
   return (
-    <AppLayout title="Relatórios" subtitle="Análises e exportação de dados">
-      <Tabs defaultValue="movements">
-        <TabsList className="mb-6">
-          <TabsTrigger value="movements">Movimentações</TabsTrigger>
-          <TabsTrigger value="collaborators">Por Colaborador</TabsTrigger>
-          <TabsTrigger value="products">Por Produto</TabsTrigger>
-          <TabsTrigger value="purposes">Por Finalidade</TabsTrigger>
+    <AppLayout title="Relatórios & Análises" subtitle="Curva ABC, KPIs e análise de utilização">
+      <div className="mb-4 flex justify-end">
+        <Button onClick={exportToCSV} variant="outline">
+          <Download className="mr-2 h-4 w-4" />
+          Exportar CSV
+        </Button>
+      </div>
+
+      <Tabs defaultValue="abc">
+        <TabsList className="mb-6 flex-wrap">
+          <TabsTrigger value="abc" className="gap-1.5">
+            <Target className="h-4 w-4" />
+            Curva ABC
+          </TabsTrigger>
+          <TabsTrigger value="collaborators" className="gap-1.5">
+            <Users className="h-4 w-4" />
+            Colaboradores
+          </TabsTrigger>
+          <TabsTrigger value="purposes" className="gap-1.5">
+            <BarChart3 className="h-4 w-4" />
+            Finalidades
+          </TabsTrigger>
+          <TabsTrigger value="heatmap" className="gap-1.5">
+            <MapPin className="h-4 w-4" />
+            Mapa de Calor
+          </TabsTrigger>
         </TabsList>
 
-        {/* Movements Report */}
-        <TabsContent value="movements">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileBarChart className="h-5 w-5" />
-                    Relatório de Movimentações
-                  </CardTitle>
-                  <CardDescription>
-                    {filteredMovements.length} movimentação(ões) encontrada(s)
-                  </CardDescription>
-                </div>
-                <Button onClick={exportToCSV}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Exportar CSV
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Filters */}
-              <div className="mb-6 grid gap-4 rounded-lg bg-muted/50 p-4 sm:grid-cols-2 lg:grid-cols-5">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Data Início
-                  </Label>
-                  <Input
-                    type="date"
-                    value={filters.startDate}
-                    onChange={e => setFilters(f => ({ ...f, startDate: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Data Fim
-                  </Label>
-                  <Input
-                    type="date"
-                    value={filters.endDate}
-                    onChange={e => setFilters(f => ({ ...f, endDate: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tipo</Label>
-                  <Select value={filters.type} onValueChange={v => setFilters(f => ({ ...f, type: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="ENTRADA">Entrada</SelectItem>
-                      <SelectItem value="SAIDA">Saída</SelectItem>
-                      <SelectItem value="DEVOLUCAO">Devolução</SelectItem>
-                      <SelectItem value="TROCA">Troca</SelectItem>
-                      <SelectItem value="AVARIA">Avaria</SelectItem>
-                      <SelectItem value="PERDA">Perda</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Colaborador</Label>
-                  <Select value={filters.collaborator} onValueChange={v => setFilters(f => ({ ...f, collaborator: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {collaborators.map(c => (
-                        <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Finalidade</Label>
-                  <Select value={filters.purpose} onValueChange={v => setFilters(f => ({ ...f, purpose: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="SERVICO">Serviço</SelectItem>
-                      <SelectItem value="PRODUCAO">Produção</SelectItem>
-                      <SelectItem value="VENDA">Venda</SelectItem>
-                      <SelectItem value="TRANSFERENCIA">Transferência</SelectItem>
-                      <SelectItem value="AJUSTE">Ajuste</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+        {/* ABC CURVE */}
+        <TabsContent value="abc">
+          <div className="space-y-6">
+            {/* ABC Summary Cards */}
+            <div className="grid gap-4 md:grid-cols-3">
+              {(['A', 'B', 'C'] as const).map(curve => (
+                <Card key={curve}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Classe {curve}</span>
+                      <Badge style={{ backgroundColor: ABC_COLORS[curve] }} className="text-white text-lg px-3">
+                        {curve}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{abcSummary[curve].length}</div>
+                    <p className="text-sm text-muted-foreground">
+                      produtos ({abcSummary[curve].length > 0
+                        ? `${abcSummary[curve].reduce((s, a) => s + a.percentage, 0).toFixed(1)}% do volume`
+                        : '0%'})
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {curve === 'A' && '~80% da movimentação'}
+                      {curve === 'B' && '~15% da movimentação'}
+                      {curve === 'C' && '~5% da movimentação'}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
 
-              {/* Results Table */}
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead className="text-right">Qtd</TableHead>
-                      <TableHead>Finalidade</TableHead>
-                      <TableHead>Colaborador</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredMovements.slice(0, 100).map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell>
-                          {new Date(m.date).toLocaleDateString('pt-BR')} {m.time}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{m.type}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-mono">{m.productCode}</span>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{m.quantity}</TableCell>
-                        <TableCell>{m.purpose}</TableCell>
-                        <TableCell className="text-muted-foreground">{m.collaborator}</TableCell>
+            {/* ABC Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Distribuição Curva ABC - Top 20 Produtos</CardTitle>
+                <CardDescription>Quantidade movimentada por produto com percentual acumulado</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={abcChartData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="name" className="text-xs" angle={-45} textAnchor="end" height={60} />
+                      <YAxis className="text-xs" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Bar dataKey="quantidade" name="Quantidade" radius={[4, 4, 0, 0]}>
+                        {abcChartData.map((entry, index) => (
+                          <Cell key={index} fill={ABC_COLORS[entry.curve as 'A' | 'B' | 'C']} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ABC Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Detalhamento da Curva ABC</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead className="text-center">Classe</TableHead>
+                        <TableHead className="text-right">Qtd Total</TableHead>
+                        <TableHead className="text-right">Movim.</TableHead>
+                        <TableHead className="text-right">% Individual</TableHead>
+                        <TableHead className="text-right">% Acumulado</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Collaborators Report */}
-        <TabsContent value="collaborators">
-          <Card>
-            <CardHeader>
-              <CardTitle>Movimentações por Colaborador</CardTitle>
-              <CardDescription>Resumo das atividades de cada colaborador</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Colaborador</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Entradas</TableHead>
-                      <TableHead className="text-right">Saídas</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Object.entries(movementsByCollaborator)
-                      .sort((a, b) => b[1].total - a[1].total)
-                      .map(([name, stats]) => (
-                        <TableRow key={name}>
-                          <TableCell className="font-medium">{name}</TableCell>
-                          <TableCell className="text-right">{stats.total}</TableCell>
-                          <TableCell className="text-right text-success">{stats.entradas}</TableCell>
-                          <TableCell className="text-right text-destructive">{stats.saidas}</TableCell>
+                    </TableHeader>
+                    <TableBody>
+                      {abcAnalysis.slice(0, 30).map((item, i) => (
+                        <TableRow key={item.product.id}>
+                          <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                          <TableCell className="font-mono font-medium">{item.product.code}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">{item.product.description}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge style={{ backgroundColor: ABC_COLORS[item.curve] }} className="text-white">
+                              {item.curve}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">{item.totalQuantity}</TableCell>
+                          <TableCell className="text-right">{item.totalMovements}</TableCell>
+                          <TableCell className="text-right">{item.percentage.toFixed(2)}%</TableCell>
+                          <TableCell className="text-right font-medium">{item.cumulativePercentage.toFixed(1)}%</TableCell>
                         </TableRow>
                       ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        {/* Products Report */}
-        <TabsContent value="products">
-          <Card>
-            <CardHeader>
-              <CardTitle>Top 10 Produtos Mais Movimentados</CardTitle>
-              <CardDescription>Produtos com maior número de movimentações</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="text-right">Movimentações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {topProducts.map((product, index) => (
-                      <TableRow key={product.code}>
-                        <TableCell className="font-bold text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell className="font-mono font-medium">{product.code}</TableCell>
-                        <TableCell>{product.description}</TableCell>
-                        <TableCell className="text-right font-bold">{product.count}</TableCell>
+        {/* COLLABORATORS KPI */}
+        <TabsContent value="collaborators">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Produtividade por Colaborador</CardTitle>
+                <CardDescription>KPIs operacionais individuais</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={collabChartData} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis type="number" className="text-xs" />
+                      <YAxis dataKey="name" type="category" className="text-xs" width={80} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Bar dataKey="movimentacoes" name="Movimentações" fill="hsl(220, 70%, 45%)" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Detalhamento por Colaborador</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Colaborador</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">%</TableHead>
+                        <TableHead className="text-right">Entradas</TableHead>
+                        <TableHead className="text-right">Saídas</TableHead>
+                        <TableHead className="text-right">Devoluções</TableHead>
+                        <TableHead className="text-right">Avarias</TableHead>
+                        <TableHead className="text-right">Perdas</TableHead>
+                        <TableHead className="text-right">Qtd Total</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {collaboratorKPIs.map(kpi => (
+                        <TableRow key={kpi.name}>
+                          <TableCell className="font-medium">{kpi.name}</TableCell>
+                          <TableCell className="text-right font-bold">{kpi.totalMovements}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={kpi.percentage > 35 ? 'destructive' : 'secondary'}>
+                              {kpi.percentage.toFixed(1)}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-success">{kpi.entradas}</TableCell>
+                          <TableCell className="text-right text-destructive">{kpi.saidas}</TableCell>
+                          <TableCell className="text-right">{kpi.devolucoes}</TableCell>
+                          <TableCell className="text-right text-warning">{kpi.avarias}</TableCell>
+                          <TableCell className="text-right text-destructive">{kpi.perdas}</TableCell>
+                          <TableCell className="text-right font-medium">{kpi.totalQuantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {collaboratorKPIs.some(k => k.percentage > 35) && (
+                  <div className="mt-4 rounded-lg border border-warning/30 bg-warning/5 p-3">
+                    <p className="text-sm font-medium text-warning">⚠️ Concentração de Operador Detectada</p>
+                    <p className="text-sm text-muted-foreground">
+                      Um colaborador concentra mais de 35% das operações. Considere balancear a carga de trabalho.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        {/* Purposes Report */}
+        {/* PURPOSES / PROJECTS */}
         <TabsContent value="purposes">
-          <Card>
-            <CardHeader>
-              <CardTitle>Movimentações por Finalidade</CardTitle>
-              <CardDescription>Distribuição das movimentações por tipo de uso</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(movementsByPurpose)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([purpose, count]) => (
-                    <Card key={purpose}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">{purpose}</p>
-                            <p className="text-3xl font-bold">{count}</p>
-                          </div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                            <FileBarChart className="h-6 w-6 text-primary" />
-                          </div>
+          <div className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Distribuição por Finalidade/Projeto</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={purposeChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={2}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name.substring(0, 10)} ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {purposeChartData.map((_, index) => (
+                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Detalhamento por Projeto</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {purposeAnalysis.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+                        <div>
+                          <p className="font-medium text-sm">
+                            {item.projectCode || item.purpose}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.products.length} produto(s) · {item.totalQuantity} un. total
+                          </p>
                         </div>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {((count / movements.length) * 100).toFixed(1)}% do total
+                        <div className="text-right">
+                          <p className="text-lg font-bold">{item.totalMovements}</p>
+                          <p className="text-xs text-muted-foreground">{item.percentage.toFixed(1)}%</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* HEAT MAP */}
+        <TabsContent value="heatmap">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Mapa de Calor - Utilização de Endereços</CardTitle>
+                <CardDescription>Áreas mais acessadas do armazém baseado em movimentações</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {locationHeatData.slice(0, 25).map((loc, i) => {
+                    const intensity = loc.intensity;
+                    const bgColor = intensity > 70
+                      ? 'bg-destructive/80 text-destructive-foreground'
+                      : intensity > 40
+                        ? 'bg-warning/60 text-warning-foreground'
+                        : intensity > 15
+                          ? 'bg-primary/30 text-foreground'
+                          : 'bg-muted text-muted-foreground';
+
+                    return (
+                      <div
+                        key={i}
+                        className={`rounded-lg p-3 text-center transition-all ${bgColor}`}
+                      >
+                        <p className="font-mono text-sm font-bold">
+                          STNT{loc.shelf}
                         </p>
-                      </CardContent>
-                    </Card>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
+                        <p className="text-xs">PRAT{loc.rack}</p>
+                        <p className="mt-1 text-lg font-bold">{loc.movementCount}</p>
+                        <p className="text-xs">mov.</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>Intensidade:</span>
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-8 rounded bg-muted" /> Baixa
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-8 rounded bg-primary/30" /> Média
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-8 rounded bg-warning/60" /> Alta
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-8 rounded bg-destructive/80" /> Crítica
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Ranking de Endereços</CardTitle>
+                <CardDescription>Endereços ordenados por volume de movimentação</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Endereço</TableHead>
+                        <TableHead className="text-right">Movimentações</TableHead>
+                        <TableHead className="text-right">Qtd Total</TableHead>
+                        <TableHead className="text-right">Intensidade</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {locationHeatData.slice(0, 15).map((loc, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-bold text-muted-foreground">{i + 1}</TableCell>
+                          <TableCell className="font-mono font-medium">
+                            STNT{loc.shelf}-PRAT{loc.rack}
+                          </TableCell>
+                          <TableCell className="text-right">{loc.movementCount}</TableCell>
+                          <TableCell className="text-right">{loc.totalQuantity}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="h-2 w-16 rounded-full bg-muted">
+                                <div
+                                  className="h-2 rounded-full bg-primary"
+                                  style={{ width: `${loc.intensity}%` }}
+                                />
+                              </div>
+                              <span className="text-xs">{loc.intensity.toFixed(0)}%</span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </AppLayout>

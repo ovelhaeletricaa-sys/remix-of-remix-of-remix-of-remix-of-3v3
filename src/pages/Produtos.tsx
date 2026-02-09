@@ -7,41 +7,17 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import type { Product } from '@/types/inventory';
-
-const CATEGORIES = [
-  'CABOS',
-  'CONECTORES',
-  'FERRAMENTAS',
-  'FIXADORES',
-  'ELÉTRICA',
-  'CONSUMÍVEIS',
-  'MOTORES',
-  'SENSORES',
-  'OUTROS',
-];
+import type { Product, ProductCategory } from '@/types/inventory';
+import { PRODUCT_CATEGORIES } from '@/types/inventory';
 
 export default function Produtos() {
   const { products, locations, addProduct, updateProduct, deleteProduct } = useInventoryContext();
@@ -53,7 +29,7 @@ export default function Produtos() {
   const [formData, setFormData] = useState({
     code: '',
     description: '',
-    category: '',
+    category: 'OUTROS' as ProductCategory,
     unit: 'UN',
     minStock: 10,
     currentStock: 0,
@@ -85,7 +61,7 @@ export default function Produtos() {
       setFormData({
         code: '',
         description: '',
-        category: '',
+        category: 'OUTROS',
         unit: 'UN',
         minStock: 10,
         currentStock: 0,
@@ -111,7 +87,9 @@ export default function Produtos() {
     }
   };
 
-  const locationOptions = locations.map(l => `${l.shelf}-${l.rack}`);
+  const getCategoryLabel = (cat: ProductCategory) => {
+    return PRODUCT_CATEGORIES.find(c => c.value === cat)?.label || cat;
+  };
 
   return (
     <AppLayout title="Produtos" subtitle="Gerenciamento de produtos do estoque">
@@ -120,7 +98,7 @@ export default function Produtos() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Cadastro de Produtos
+              Cadastro de Produtos ({products.length} itens)
             </CardTitle>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
@@ -143,7 +121,7 @@ export default function Produtos() {
                         id="code"
                         value={formData.code}
                         onChange={e => setFormData(f => ({ ...f, code: e.target.value }))}
-                        placeholder="PROD-001"
+                        placeholder="PRD00001"
                         required
                       />
                     </div>
@@ -162,6 +140,8 @@ export default function Produtos() {
                           <SelectItem value="KG">KG (Quilo)</SelectItem>
                           <SelectItem value="L">L (Litro)</SelectItem>
                           <SelectItem value="CX">CX (Caixa)</SelectItem>
+                          <SelectItem value="M2">M² (Metro²)</SelectItem>
+                          <SelectItem value="PCT">PCT (Pacote)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -183,33 +163,26 @@ export default function Produtos() {
                       <Label htmlFor="category">Categoria</Label>
                       <Select
                         value={formData.category}
-                        onValueChange={value => setFormData(f => ({ ...f, category: value }))}
+                        onValueChange={(value: ProductCategory) => setFormData(f => ({ ...f, category: value }))}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
-                          {CATEGORIES.map(cat => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          {PRODUCT_CATEGORIES.map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="location">Localização</Label>
-                      <Select
+                      <Input
+                        id="location"
                         value={formData.location}
-                        onValueChange={value => setFormData(f => ({ ...f, location: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {locationOptions.map(loc => (
-                            <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={e => setFormData(f => ({ ...f, location: e.target.value }))}
+                        placeholder="STNT01-PRAT01"
+                      />
                     </div>
                   </div>
 
@@ -262,13 +235,13 @@ export default function Produtos() {
               />
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-48">
+              <SelectTrigger className="w-full sm:w-56">
                 <SelectValue placeholder="Categoria" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as categorias</SelectItem>
-                {CATEGORIES.map(cat => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                {PRODUCT_CATEGORIES.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -283,6 +256,7 @@ export default function Produtos() {
                   <TableHead className="font-semibold">Descrição</TableHead>
                   <TableHead className="font-semibold">Categoria</TableHead>
                   <TableHead className="font-semibold">Localização</TableHead>
+                  <TableHead className="text-center font-semibold">ABC</TableHead>
                   <TableHead className="text-right font-semibold">Estoque</TableHead>
                   <TableHead className="text-right font-semibold">Mínimo</TableHead>
                   <TableHead className="w-24"></TableHead>
@@ -291,7 +265,7 @@ export default function Produtos() {
               <TableBody>
                 {filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                       Nenhum produto encontrado
                     </TableCell>
                   </TableRow>
@@ -301,9 +275,16 @@ export default function Produtos() {
                       <TableCell className="font-mono font-medium">{product.code}</TableCell>
                       <TableCell>{product.description}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{product.category}</Badge>
+                        <Badge variant="secondary" className="text-xs">{getCategoryLabel(product.category)}</Badge>
                       </TableCell>
-                      <TableCell className="font-mono">{product.location}</TableCell>
+                      <TableCell className="font-mono text-sm">{product.location}</TableCell>
+                      <TableCell className="text-center">
+                        {product.curvaABC && (
+                          <Badge variant={product.curvaABC === 'A' ? 'default' : product.curvaABC === 'B' ? 'secondary' : 'outline'} className="text-xs">
+                            {product.curvaABC}
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {product.currentStock < product.minStock && (
@@ -319,18 +300,10 @@ export default function Produtos() {
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenDialog(product)}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(product)}>
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(product.id)}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(product.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>

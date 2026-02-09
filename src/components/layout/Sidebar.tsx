@@ -35,8 +35,8 @@ export function Sidebar() {
           <Factory className="h-6 w-6 text-sidebar-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-sidebar-foreground">EstoqueMax</h1>
-          <p className="text-xs text-sidebar-foreground/60">Controle Industrial</p>
+          <h1 className="text-lg font-bold text-sidebar-foreground">3V3 Estoque</h1>
+          <p className="text-xs text-sidebar-foreground/60">Controle de Armazém</p>
         </div>
       </div>
 
@@ -73,8 +73,8 @@ export function Sidebar() {
       {/* Footer */}
       <div className="border-t border-sidebar-border p-4">
         <div className="rounded-lg bg-sidebar-accent/10 p-3">
-          <p className="text-xs text-sidebar-foreground/60">Dados armazenados localmente</p>
-          <p className="text-xs font-medium text-sidebar-foreground/80">neste navegador</p>
+          <p className="text-xs font-medium text-sidebar-foreground/80">3V3 Tecnologia</p>
+          <p className="text-xs text-sidebar-foreground/60">Dados locais no navegador</p>
         </div>
       </div>
     </aside>
