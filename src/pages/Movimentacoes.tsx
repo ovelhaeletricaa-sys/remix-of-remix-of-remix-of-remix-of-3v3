@@ -22,12 +22,12 @@ import { MOVEMENT_PURPOSES } from '@/types/inventory';
 import { useToast } from '@/hooks/use-toast';
 
 const MOVEMENT_TYPES: { value: MovementType; label: string; icon: React.ReactNode; color: string }[] = [
-  { value: 'ENTRADA', label: 'Entrada', icon: <ArrowUpCircle className="h-4 w-4" />, color: 'bg-green-500' },
-  { value: 'SAIDA', label: 'Saída', icon: <ArrowDownCircle className="h-4 w-4" />, color: 'bg-red-500' },
-  { value: 'DEVOLUCAO', label: 'Devolução', icon: <RefreshCw className="h-4 w-4" />, color: 'bg-blue-500' },
-  { value: 'TROCA', label: 'Troca', icon: <Repeat className="h-4 w-4" />, color: 'bg-purple-500' },
-  { value: 'AVARIA', label: 'Avaria', icon: <AlertOctagon className="h-4 w-4" />, color: 'bg-orange-500' },
-  { value: 'PERDA', label: 'Perda', icon: <XCircle className="h-4 w-4" />, color: 'bg-red-700' },
+  { value: 'ENTRADA', label: 'Entrada', icon: <ArrowUpCircle className="h-4 w-4" />, color: 'bg-success text-success-foreground' },
+  { value: 'SAIDA', label: 'Saída', icon: <ArrowDownCircle className="h-4 w-4" />, color: 'bg-destructive text-destructive-foreground' },
+  { value: 'DEVOLUCAO', label: 'Devolução', icon: <RefreshCw className="h-4 w-4" />, color: 'bg-info text-info-foreground' },
+  { value: 'TROCA', label: 'Troca', icon: <Repeat className="h-4 w-4" />, color: 'bg-primary text-primary-foreground' },
+  { value: 'AVARIA', label: 'Avaria', icon: <AlertOctagon className="h-4 w-4" />, color: 'bg-warning text-warning-foreground' },
+  { value: 'PERDA', label: 'Perda', icon: <XCircle className="h-4 w-4" />, color: 'bg-destructive text-destructive-foreground' },
 ];
 
 export default function Movimentacoes() {
@@ -348,7 +348,7 @@ export default function Movimentacoes() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={`${typeInfo?.color} text-white`}>
+                          <Badge className={`${typeInfo?.color}`}>
                             {typeInfo?.label}
                           </Badge>
                         </TableCell>

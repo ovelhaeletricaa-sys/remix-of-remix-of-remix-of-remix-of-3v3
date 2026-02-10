@@ -11,9 +11,9 @@ export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <div className="pl-64">
+      <div className="pl-[260px]">
         <Header title={title} subtitle={subtitle} />
-        <main className="p-6">
+        <main className="p-8">
           {children}
         </main>
       </div>

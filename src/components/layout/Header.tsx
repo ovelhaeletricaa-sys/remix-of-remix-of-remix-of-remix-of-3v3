@@ -22,55 +22,57 @@ export function Header({ title, subtitle }: HeaderProps) {
   const unreadAlerts = alerts.filter(a => !a.isRead).length;
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-40 flex h-[72px] items-center justify-between border-b border-border/60 bg-background/80 px-8 backdrop-blur-xl">
       <div>
-        <h1 className="text-xl font-bold">{title}</h1>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        <h1 className="text-lg font-bold tracking-tight">{title}</h1>
+        {subtitle && (
+          <p className="text-[13px] text-muted-foreground">{subtitle}</p>
+        )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
         {/* Search */}
-        <div className="relative hidden md:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative hidden lg:block">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
           <Input 
             placeholder="Buscar produto ou código..." 
-            className="w-64 pl-9"
+            className="h-9 w-60 rounded-lg border-border/60 bg-muted/50 pl-9 text-[13px] placeholder:text-muted-foreground/50 focus-visible:bg-background"
           />
         </div>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground">
+          <Bell className="h-[18px] w-[18px]" />
           {unreadAlerts > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full px-1.5 text-xs"
-            >
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
               {unreadAlerts}
-            </Badge>
+            </span>
           )}
         </Button>
+
+        {/* Separator */}
+        <div className="mx-1 h-6 w-px bg-border/60" />
 
         {/* User */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <User className="h-4 w-4" />
+            <Button variant="ghost" className="h-9 gap-2.5 rounded-lg px-2 text-[13px] font-medium text-muted-foreground hover:text-foreground">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <User className="h-3.5 w-3.5" />
               </div>
               <span className="hidden md:inline">
-                {currentUser || 'Selecionar usuário'}
+                {currentUser || 'Selecionar'}
               </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel>Colaborador</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Colaborador</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {collaborators.map((collab) => (
               <DropdownMenuItem 
                 key={collab.id}
                 onClick={() => setUser(collab.name)}
-                className={currentUser === collab.name ? 'bg-accent' : ''}
+                className={currentUser === collab.name ? 'bg-primary/10 text-primary font-medium' : ''}
               >
                 {collab.name}
               </DropdownMenuItem>
