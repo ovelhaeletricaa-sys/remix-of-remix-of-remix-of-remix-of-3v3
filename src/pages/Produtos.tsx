@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, Upload } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ImportDialog } from '@/components/ImportDialog';
 import { useInventoryContext } from '@/contexts/InventoryContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,8 @@ import type { Product, ProductCategory } from '@/types/inventory';
 import { PRODUCT_CATEGORIES } from '@/types/inventory';
 
 export default function Produtos() {
-  const { products, locations, addProduct, updateProduct, deleteProduct } = useInventoryContext();
+  const { products, locations, addProduct, updateProduct, deleteProduct, importProducts } = useInventoryContext();
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -100,13 +102,18 @@ export default function Produtos() {
               <Package className="h-5 w-5" />
               Cadastro de Produtos ({products.length} itens)
             </CardTitle>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => handleOpenDialog()}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Novo Produto
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Importar Planilha
+              </Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => handleOpenDialog()}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Novo Produto
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>
@@ -220,7 +227,14 @@ export default function Produtos() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
+          <ImportDialog
+            open={isImportOpen}
+            onOpenChange={setIsImportOpen}
+            existingProducts={products}
+            onImport={importProducts}
+          />
         </CardHeader>
         <CardContent>
           {/* Filters */}
