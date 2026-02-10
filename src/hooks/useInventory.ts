@@ -125,6 +125,32 @@ export function useInventory() {
     return newProduct;
   }, []);
 
+  const importProducts = useCallback((items: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[]) => {
+    setProducts(prev => {
+      const existingMap = new Map(prev.map(p => [p.code.toUpperCase(), p]));
+      const now = new Date().toISOString();
+      const updated = [...prev];
+
+      for (const item of items) {
+        const key = item.code.toUpperCase();
+        const existing = existingMap.get(key);
+        if (existing) {
+          const idx = updated.findIndex(p => p.id === existing.id);
+          if (idx !== -1) {
+            updated[idx] = { ...existing, ...item, id: existing.id, createdAt: existing.createdAt, updatedAt: now };
+          }
+        } else {
+          const newProduct: Product = { ...item, id: generateId(), createdAt: now, updatedAt: now };
+          updated.push(newProduct);
+          existingMap.set(key, newProduct);
+        }
+      }
+
+      setStorageItem(STORAGE_KEYS.PRODUCTS, updated);
+      return updated;
+    });
+  }, []);
+
   const updateProduct = useCallback((id: string, updates: Partial<Product>) => {
     setProducts(prev => {
       const updated = prev.map(p => 
@@ -257,6 +283,7 @@ export function useInventory() {
     addProduct,
     updateProduct,
     deleteProduct,
+    importProducts,
     
     // Movement operations
     addMovement,
