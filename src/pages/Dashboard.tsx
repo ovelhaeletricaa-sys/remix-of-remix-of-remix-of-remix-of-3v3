@@ -3,10 +3,10 @@ import {
   ArrowRightLeft, 
   AlertTriangle, 
   MapPin,
-  TrendingUp,
   TrendingDown,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  GitCompare
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -59,13 +59,20 @@ export default function Dashboard() {
   // Products with low stock
   const lowStockProducts = products.filter(p => p.currentStock < p.minStock);
 
+  // OMIE divergences
+  const omieDiv = products.filter(p => {
+    const omie = p.stockOmie ?? 0;
+    if (omie === 0) return false;
+    return Math.abs(p.currentStock - omie) / omie > 0.1;
+  });
+
   // Recent alerts
   const recentAlerts = alerts.slice(0, 5);
 
   return (
     <AppLayout title="Dashboard" subtitle="Visão geral do estoque">
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -122,6 +129,21 @@ export default function Dashboard() {
             <div className="text-3xl font-bold">{stats.totalLocations}</div>
             <p className="text-xs text-muted-foreground">
               localizações no armazém
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Divergências OMIE
+            </CardTitle>
+            <GitCompare className="h-5 w-5 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-3xl font-bold ${omieDiv.length > 0 ? 'text-primary' : ''}`}>{omieDiv.length}</div>
+            <p className="text-xs text-muted-foreground">
+              físico ≠ OMIE (&gt;10%)
             </p>
           </CardContent>
         </Card>

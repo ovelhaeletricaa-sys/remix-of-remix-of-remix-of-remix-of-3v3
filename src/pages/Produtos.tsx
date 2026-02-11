@@ -35,6 +35,7 @@ export default function Produtos() {
     unit: 'UN',
     minStock: 10,
     currentStock: 0,
+    stockOmie: 0,
     location: '',
   });
 
@@ -56,6 +57,7 @@ export default function Produtos() {
         unit: product.unit,
         minStock: product.minStock,
         currentStock: product.currentStock,
+        stockOmie: product.stockOmie,
         location: product.location,
       });
     } else {
@@ -67,6 +69,7 @@ export default function Produtos() {
         unit: 'UN',
         minStock: 10,
         currentStock: 0,
+        stockOmie: 0,
         location: '',
       });
     }
@@ -193,9 +196,9 @@ export default function Produtos() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="currentStock">Estoque Atual</Label>
+                      <Label htmlFor="currentStock">Est. Físico</Label>
                       <Input
                         id="currentStock"
                         type="number"
@@ -205,13 +208,23 @@ export default function Produtos() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="minStock">Estoque Mínimo</Label>
+                      <Label htmlFor="minStock">Est. Mínimo</Label>
                       <Input
                         id="minStock"
                         type="number"
                         min="0"
                         value={formData.minStock}
                         onChange={e => setFormData(f => ({ ...f, minStock: parseInt(e.target.value) || 0 }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="stockOmie">Qtd OMIE</Label>
+                      <Input
+                        id="stockOmie"
+                        type="number"
+                        min="0"
+                        value={formData.stockOmie}
+                        onChange={e => setFormData(f => ({ ...f, stockOmie: parseInt(e.target.value) || 0 }))}
                       />
                     </div>
                   </div>
@@ -269,22 +282,28 @@ export default function Produtos() {
                   <TableHead className="font-semibold">Código</TableHead>
                   <TableHead className="font-semibold">Descrição</TableHead>
                   <TableHead className="font-semibold">Categoria</TableHead>
-                  <TableHead className="font-semibold">Localização</TableHead>
+                  <TableHead className="font-semibold">Local</TableHead>
                   <TableHead className="text-center font-semibold">ABC</TableHead>
-                  <TableHead className="text-right font-semibold">Estoque</TableHead>
+                  <TableHead className="text-right font-semibold">Físico</TableHead>
                   <TableHead className="text-right font-semibold">Mínimo</TableHead>
+                  <TableHead className="text-right font-semibold">OMIE</TableHead>
+                  <TableHead className="text-center font-semibold">Divergência</TableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                       Nenhum produto encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredProducts.map((product) => (
+                  filteredProducts.map((product) => {
+                    const divergence = product.currentStock - product.stockOmie;
+                    const hasDivergence = divergence !== 0;
+                    const percentDiv = product.stockOmie > 0 ? Math.abs(divergence / product.stockOmie * 100) : 0;
+                    return (
                     <TableRow key={product.id}>
                       <TableCell className="font-mono font-medium">{product.code}</TableCell>
                       <TableCell>{product.description}</TableCell>
@@ -312,6 +331,18 @@ export default function Produtos() {
                       <TableCell className="text-right text-muted-foreground">
                         {product.minStock}
                       </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {product.stockOmie}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {hasDivergence ? (
+                          <Badge variant={percentDiv > 20 ? 'destructive' : 'secondary'} className="text-xs font-mono">
+                            {divergence > 0 ? '+' : ''}{divergence} ({percentDiv.toFixed(0)}%)
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(product)}>
@@ -323,7 +354,8 @@ export default function Produtos() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
