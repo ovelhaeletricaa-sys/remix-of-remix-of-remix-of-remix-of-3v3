@@ -21,6 +21,8 @@ export default function Alertas() {
         return <AlertTriangle className="h-5 w-5 text-warning" />;
       case 'LOSS':
         return <XCircle className="h-5 w-5 text-destructive" />;
+      case 'OMIE_DIVERGENCE':
+        return <AlertTriangle className="h-5 w-5 text-primary" />;
       default:
         return <Bell className="h-5 w-5 text-muted-foreground" />;
     }
@@ -36,6 +38,8 @@ export default function Alertas() {
         return <Badge className="bg-warning text-warning-foreground">Avaria</Badge>;
       case 'LOSS':
         return <Badge variant="destructive">Perda</Badge>;
+      case 'OMIE_DIVERGENCE':
+        return <Badge className="bg-primary text-primary-foreground">Divergência OMIE</Badge>;
       default:
         return <Badge variant="secondary">Alerta</Badge>;
     }

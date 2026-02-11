@@ -67,7 +67,7 @@ export function useInventory() {
     setIsLoading(false);
   }, []);
 
-  // Generate alerts based on stock levels
+  // Generate alerts based on stock levels and OMIE divergences
   useEffect(() => {
     if (products.length === 0) return;
 
@@ -95,6 +95,25 @@ export function useInventory() {
           isRead: false,
           createdAt: new Date().toISOString(),
         });
+      }
+
+      // OMIE divergence alert (>20% difference)
+      const omieStock = product.stockOmie ?? 0;
+      if (omieStock > 0) {
+        const diff = Math.abs(product.currentStock - omieStock);
+        const percentDiff = (diff / omieStock) * 100;
+        if (percentDiff > 20) {
+          newAlerts.push({
+            id: generateId(),
+            productId: product.id,
+            productCode: product.code,
+            productDescription: product.description,
+            type: 'OMIE_DIVERGENCE',
+            message: `Divergência OMIE no produto ${product.code}: Físico ${product.currentStock} vs OMIE ${omieStock} (${percentDiff.toFixed(0)}%)`,
+            isRead: false,
+            createdAt: new Date().toISOString(),
+          });
+        }
       }
     });
 

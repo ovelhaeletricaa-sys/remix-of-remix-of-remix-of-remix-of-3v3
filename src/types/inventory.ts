@@ -8,10 +8,23 @@ export interface Product {
   unit: string;
   minStock: number;
   currentStock: number;
+  stockOmie: number;
   location: string;
   curvaABC?: 'A' | 'B' | 'C';
   createdAt: string;
   updatedAt: string;
+}
+
+// Divergence types for multiple quantity analysis
+export type StockDivergenceType = 'FISICO_ABAIXO_MINIMO' | 'FISICO_OMIE_DIVERGENTE' | 'OMIE_ABAIXO_MINIMO' | 'SEM_DIVERGENCIA';
+
+export interface StockDivergence {
+  product: Product;
+  type: StockDivergenceType;
+  diffFisicoOmie: number;        // currentStock - stockOmie
+  diffFisicoMinimo: number;      // currentStock - minStock
+  diffOmieMinimo: number;        // stockOmie - minStock
+  percentDivergence: number;     // % diff between fisico and omie
 }
 
 export type ProductCategory =
@@ -113,7 +126,7 @@ export interface Alert {
   productId: string;
   productCode: string;
   productDescription: string;
-  type: 'LOW_STOCK' | 'OUT_OF_STOCK' | 'DAMAGE' | 'LOSS';
+  type: 'LOW_STOCK' | 'OUT_OF_STOCK' | 'DAMAGE' | 'LOSS' | 'OMIE_DIVERGENCE';
   message: string;
   isRead: boolean;
   createdAt: string;

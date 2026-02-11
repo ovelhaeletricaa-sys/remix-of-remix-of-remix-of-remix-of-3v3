@@ -223,6 +223,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
         unit: row.unit,
         minStock: row.minStock,
         currentStock: row.currentStock,
+        stockOmie: 0,
         location: row.location,
       };
     });
