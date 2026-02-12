@@ -12,11 +12,9 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { MovementType, MovementPurpose } from '@/types/inventory';
 import { MOVEMENT_PURPOSES } from '@/types/inventory';
 import { useToast } from '@/hooks/use-toast';
@@ -59,11 +57,26 @@ export default function Movimentacoes() {
 
   const selectedProduct = products.find(p => p.id === formData.productId);
 
+  const productOptions = products.map(p => ({
+    value: p.id,
+    label: `${p.code} - ${p.description}`,
+    sublabel: `Estoque: ${p.currentStock} ${p.unit} · ${p.location}`,
+  }));
+
+  const purposeOptions = MOVEMENT_PURPOSES.map(p => ({
+    value: p.value,
+    label: p.label,
+  }));
+
+  const typeFilterOptions = [
+    { value: 'all', label: 'Todos os tipos' },
+    ...MOVEMENT_TYPES.map(t => ({ value: t.value, label: t.label })),
+  ];
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct) return;
 
-    // Stock validation for outgoing movements
     if (['SAIDA', 'AVARIA', 'PERDA'].includes(formData.type)) {
       if (formData.quantity > selectedProduct.currentStock) {
         toast({
@@ -75,7 +88,6 @@ export default function Movimentacoes() {
       }
     }
 
-    // Quantity validation
     if (formData.quantity <= 0) {
       toast({
         title: 'Quantidade inválida',
@@ -169,21 +181,14 @@ export default function Movimentacoes() {
                   {/* Product Selection */}
                   <div className="space-y-2">
                     <Label htmlFor="product">Produto</Label>
-                    <Select
+                    <SearchableSelect
+                      options={productOptions}
                       value={formData.productId}
                       onValueChange={value => setFormData(f => ({ ...f, productId: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o produto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map(product => (
-                          <SelectItem key={product.id} value={product.id}>
-                            <span className="font-mono">{product.code}</span> - {product.description}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Selecione o produto"
+                      searchPlaceholder="Buscar por código ou descrição..."
+                      emptyMessage="Nenhum produto encontrado."
+                    />
                     {selectedProduct && (
                       <div className="rounded bg-muted/50 p-2 text-sm">
                         <p className="text-muted-foreground">
@@ -216,19 +221,13 @@ export default function Movimentacoes() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="purpose">Finalidade</Label>
-                      <Select
+                      <SearchableSelect
+                        options={purposeOptions}
                         value={formData.purpose}
-                        onValueChange={(value: MovementPurpose) => setFormData(f => ({ ...f, purpose: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MOVEMENT_PURPOSES.map(p => (
-                            <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onValueChange={(value) => setFormData(f => ({ ...f, purpose: value as MovementPurpose }))}
+                        placeholder="Selecione"
+                        searchPlaceholder="Buscar finalidade..."
+                      />
                     </div>
                   </div>
 
@@ -302,17 +301,15 @@ export default function Movimentacoes() {
                 className="pl-9"
               />
             </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os tipos</SelectItem>
-                {MOVEMENT_TYPES.map(type => (
-                  <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full sm:w-48">
+              <SearchableSelect
+                options={typeFilterOptions}
+                value={typeFilter}
+                onValueChange={setTypeFilter}
+                placeholder="Tipo"
+                searchPlaceholder="Buscar tipo..."
+              />
+            </div>
           </div>
 
           {/* Table */}
