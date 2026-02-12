@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, Check, AlertTriangle, X } from 'lucide-react';
+import { Upload, FileSpreadsheet, Check, AlertTriangle, X, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -26,6 +26,7 @@ interface ParsedRow {
   unit: string;
   minStock: number;
   currentStock: number;
+  stockOmie: number;
   location: string;
   status: 'new' | 'update' | 'error';
   error?: string;
@@ -102,6 +103,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
     unit: '',
     minStock: '',
     currentStock: '',
+    stockOmie: '',
     location: '',
   });
 
@@ -112,6 +114,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
     unit: 'Unidade',
     minStock: 'Estoque Mínimo',
     currentStock: 'Estoque Atual',
+    stockOmie: 'Estoque OMIE',
     location: 'Localização',
   };
 
@@ -122,8 +125,31 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
     setFileName('');
     setParsedRows([]);
     setProgress(0);
-    setMapping({ code: '', description: '', category: '', unit: '', minStock: '', currentStock: '', location: '' });
+    setMapping({ code: '', description: '', category: '', unit: '', minStock: '', currentStock: '', stockOmie: '', location: '' });
     setImportResult({ added: 0, updated: 0, errors: 0 });
+  };
+
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        'Código': 'EX-001',
+        'Descrição': 'Exemplo de produto',
+        'Categoria': 'EPI',
+        'Unidade': 'UN',
+        'Estoque Mínimo': 10,
+        'Estoque Atual': 25,
+        'Estoque OMIE': 25,
+        'Localização': 'A1-P1',
+      },
+    ];
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 10 },
+      { wch: 15 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Modelo');
+    XLSX.writeFile(wb, 'modelo-importacao-produtos.xlsx');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,7 +176,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
         setRawData(json);
 
         // Auto-map columns by guessing
-        const autoMap: Record<string, string> = { code: '', description: '', category: '', unit: '', minStock: '', currentStock: '', location: '' };
+        const autoMap: Record<string, string> = { code: '', description: '', category: '', unit: '', minStock: '', currentStock: '', stockOmie: '', location: '' };
         for (const col of cols) {
           const lower = col.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
           if (/codigo|code|cod|sku/.test(lower) && !autoMap.code) autoMap.code = col;
@@ -159,6 +185,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
           else if (/unid|un\b|medida/.test(lower) && !autoMap.unit) autoMap.unit = col;
           else if (/min|segur/.test(lower) && !autoMap.minStock) autoMap.minStock = col;
           else if (/atual|saldo|estoque|qtd|quant|stock/.test(lower) && !autoMap.currentStock) autoMap.currentStock = col;
+          else if (/omie|externo|erp|sistema/.test(lower) && !autoMap.stockOmie) autoMap.stockOmie = col;
           else if (/local|enderec|estante|prat/.test(lower) && !autoMap.location) autoMap.location = col;
         }
         setMapping(autoMap);
@@ -184,7 +211,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
       const description = String(row[mapping.description] || '').trim();
 
       if (!code || !description) {
-        return { code, description, category: 'OUTROS' as ProductCategory, unit: 'UN', minStock: 0, currentStock: 0, location: '', status: 'error' as const, error: 'Código ou descrição vazio' };
+        return { code, description, category: 'OUTROS' as ProductCategory, unit: 'UN', minStock: 0, currentStock: 0, stockOmie: 0, location: '', status: 'error' as const, error: 'Código ou descrição vazio' };
       }
 
       return {
@@ -194,6 +221,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
         unit: inferUnit(mapping.unit ? String(row[mapping.unit]) : undefined),
         minStock: mapping.minStock ? (parseInt(String(row[mapping.minStock])) || 0) : 5,
         currentStock: mapping.currentStock ? (parseInt(String(row[mapping.currentStock])) || 0) : 0,
+        stockOmie: mapping.stockOmie ? (parseInt(String(row[mapping.stockOmie])) || 0) : 0,
         location: mapping.location ? String(row[mapping.location] || '').trim() : '',
         status: existingCodes.has(code) ? 'update' as const : 'new' as const,
       };
@@ -223,7 +251,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
         unit: row.unit,
         minStock: row.minStock,
         currentStock: row.currentStock,
-        stockOmie: 0,
+        stockOmie: row.stockOmie,
         location: row.location,
       };
     });
@@ -262,10 +290,16 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
               <p className="text-sm text-muted-foreground">Formatos aceitos: .xlsx, .xls, .csv</p>
             </div>
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} className="hidden" />
-            <Button size="lg" onClick={() => fileRef.current?.click()}>
-              <Upload className="mr-2 h-4 w-4" />
-              Escolher Arquivo
-            </Button>
+            <div className="flex gap-3">
+              <Button size="lg" onClick={() => fileRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" />
+                Escolher Arquivo
+              </Button>
+              <Button size="lg" variant="outline" onClick={handleDownloadTemplate}>
+                <Download className="mr-2 h-4 w-4" />
+                Baixar Modelo
+              </Button>
+            </div>
           </div>
         )}
 
@@ -318,7 +352,8 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
                       <th className="p-2">Código</th>
                       <th className="p-2">Descrição</th>
                       <th className="p-2">Categoria</th>
-                      <th className="p-2 text-right">Estoque</th>
+                      <th className="p-2 text-right">Físico</th>
+                      <th className="p-2 text-right">OMIE</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -337,6 +372,7 @@ export function ImportDialog({ open, onOpenChange, existingProducts, onImport }:
                         <td className="max-w-[200px] truncate p-2">{row.description}</td>
                         <td className="p-2 text-xs">{PRODUCT_CATEGORIES.find(c => c.value === row.category)?.label || row.category}</td>
                         <td className="p-2 text-right">{row.currentStock}</td>
+                        <td className="p-2 text-right">{row.stockOmie}</td>
                       </tr>
                     ))}
                   </tbody>
