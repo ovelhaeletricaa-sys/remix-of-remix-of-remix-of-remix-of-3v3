@@ -13,12 +13,20 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { Product, ProductCategory } from '@/types/inventory';
 import { PRODUCT_CATEGORIES } from '@/types/inventory';
+
+const UNIT_OPTIONS = [
+  { value: 'UN', label: 'UN (Unidade)' },
+  { value: 'M', label: 'M (Metro)' },
+  { value: 'KG', label: 'KG (Quilo)' },
+  { value: 'L', label: 'L (Litro)' },
+  { value: 'CX', label: 'CX (Caixa)' },
+  { value: 'M2', label: 'M² (Metro²)' },
+  { value: 'PCT', label: 'PCT (Pacote)' },
+];
 
 export default function Produtos() {
   const { products, locations, addProduct, updateProduct, deleteProduct, importProducts } = useInventoryContext();
@@ -46,6 +54,19 @@ export default function Produtos() {
     const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const categoryOptions = [
+    { value: 'all', label: 'Todas as categorias' },
+    ...PRODUCT_CATEGORIES.map(cat => ({ value: cat.value, label: cat.label })),
+  ];
+
+  const categoryFormOptions = PRODUCT_CATEGORIES.map(cat => ({ value: cat.value, label: cat.label }));
+
+  const locationOptions = locations.map(loc => ({
+    value: `STNT${loc.shelf}-PRAT${loc.rack}`,
+    label: `STNT${loc.shelf}-PRAT${loc.rack}`,
+    sublabel: loc.type === 'AEREO' ? 'Aéreo' : 'Picking',
+  }));
 
   const handleOpenDialog = (product?: Product) => {
     if (product) {
@@ -137,23 +158,13 @@ export default function Produtos() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="unit">Unidade</Label>
-                      <Select
+                      <SearchableSelect
+                        options={UNIT_OPTIONS}
                         value={formData.unit}
                         onValueChange={value => setFormData(f => ({ ...f, unit: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="UN">UN (Unidade)</SelectItem>
-                          <SelectItem value="M">M (Metro)</SelectItem>
-                          <SelectItem value="KG">KG (Quilo)</SelectItem>
-                          <SelectItem value="L">L (Litro)</SelectItem>
-                          <SelectItem value="CX">CX (Caixa)</SelectItem>
-                          <SelectItem value="M2">M² (Metro²)</SelectItem>
-                          <SelectItem value="PCT">PCT (Pacote)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        placeholder="Selecione"
+                        searchPlaceholder="Buscar unidade..."
+                      />
                     </div>
                   </div>
 
@@ -171,27 +182,22 @@ export default function Produtos() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="category">Categoria</Label>
-                      <Select
+                      <SearchableSelect
+                        options={categoryFormOptions}
                         value={formData.category}
-                        onValueChange={(value: ProductCategory) => setFormData(f => ({ ...f, category: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PRODUCT_CATEGORIES.map(cat => (
-                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onValueChange={(value) => setFormData(f => ({ ...f, category: value as ProductCategory }))}
+                        placeholder="Selecione"
+                        searchPlaceholder="Buscar categoria..."
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="location">Localização</Label>
-                      <Input
-                        id="location"
+                      <SearchableSelect
+                        options={locationOptions}
                         value={formData.location}
-                        onChange={e => setFormData(f => ({ ...f, location: e.target.value }))}
-                        placeholder="STNT01-PRAT01"
+                        onValueChange={value => setFormData(f => ({ ...f, location: value }))}
+                        placeholder="Selecione o endereço"
+                        searchPlaceholder="Buscar endereço..."
                       />
                     </div>
                   </div>
@@ -261,17 +267,15 @@ export default function Produtos() {
                 className="pl-9"
               />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-56">
-                <SelectValue placeholder="Categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as categorias</SelectItem>
-                {PRODUCT_CATEGORIES.map(cat => (
-                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full sm:w-56">
+              <SearchableSelect
+                options={categoryOptions}
+                value={categoryFilter}
+                onValueChange={setCategoryFilter}
+                placeholder="Categoria"
+                searchPlaceholder="Buscar categoria..."
+              />
+            </div>
           </div>
 
           {/* Table */}

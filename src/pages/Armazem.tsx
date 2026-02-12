@@ -8,9 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -71,17 +69,18 @@ export default function Armazem() {
         {/* Header with actions */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <Select value={selectedShelf} onValueChange={setSelectedShelf}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filtrar por estante" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as Estantes</SelectItem>
-                {shelves.map(shelf => (
-                  <SelectItem key={shelf} value={shelf}>STNT{shelf}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-48">
+              <SearchableSelect
+                options={[
+                  { value: 'all', label: 'Todas as Estantes' },
+                  ...shelves.map(shelf => ({ value: shelf, label: `STNT${shelf}` })),
+                ]}
+                value={selectedShelf}
+                onValueChange={setSelectedShelf}
+                placeholder="Filtrar por estante"
+                searchPlaceholder="Buscar estante..."
+              />
+            </div>
           </div>
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -120,16 +119,16 @@ export default function Armazem() {
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de Armazenagem</Label>
-                  <Select
+                  <SearchableSelect
+                    options={[
+                      { value: 'AEREO', label: 'Aéreo (AER)' },
+                      { value: 'PICKING', label: 'Picking (PCKN)' },
+                    ]}
                     value={formData.type}
-                    onValueChange={(value: 'AEREO' | 'PICKING') => setFormData(f => ({ ...f, type: value }))}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AEREO">Aéreo (AER)</SelectItem>
-                      <SelectItem value="PICKING">Picking (PCKN)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(value) => setFormData(f => ({ ...f, type: value as 'AEREO' | 'PICKING' }))}
+                    placeholder="Selecione"
+                    searchPlaceholder="Buscar tipo..."
+                  />
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
