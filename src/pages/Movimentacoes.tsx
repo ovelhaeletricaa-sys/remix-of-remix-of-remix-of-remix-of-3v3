@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, RefreshCw, AlertOctagon, XCircle, Search, Repeat } from 'lucide-react';
+import { Plus, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, RefreshCw, AlertOctagon, XCircle, Search, Repeat, Pencil, Trash2 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInventoryContext } from '@/contexts/InventoryContext';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,12 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { MovementType, MovementPurpose } from '@/types/inventory';
@@ -29,9 +34,10 @@ const MOVEMENT_TYPES: { value: MovementType; label: string; icon: React.ReactNod
 ];
 
 export default function Movimentacoes() {
-  const { movements, products, locations, currentUser, addMovement } = useInventoryContext();
+  const { movements, products, locations, currentUser, addMovement, updateMovement, deleteMovement } = useInventoryContext();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingMovement, setEditingMovement] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   
@@ -105,29 +111,38 @@ export default function Movimentacoes() {
         ? 'EXTERNO'
         : locations.find(l => l.id === formData.destination)?.description || formData.destination;
 
-    addMovement({
-      date: now.toISOString().split('T')[0],
-      time: now.toTimeString().slice(0, 5),
-      productId: selectedProduct.id,
-      productCode: selectedProduct.code,
-      productDescription: selectedProduct.description,
-      type: formData.type,
-      quantity: formData.quantity,
-      origin: formData.type === 'ENTRADA' ? 'EXTERNO' : resolvedAddress,
-      destination: formData.type === 'ENTRADA' ? resolvedAddress : formData.destination ? resolvedAddress : 'N/A',
-      purpose: formData.purpose,
-      projectCode: formData.projectCode || undefined,
-      equipmentCode: formData.equipmentCode || undefined,
-      collaborator: currentUser || 'Sistema',
-      observations: formData.observations || undefined,
-    });
-
-    toast({
-      title: 'Movimentação registrada',
-      description: `${formData.type} de ${formData.quantity} ${selectedProduct.unit} - ${selectedProduct.code}`,
-    });
+    if (editingMovement) {
+      updateMovement(editingMovement, {
+        type: formData.type,
+        quantity: formData.quantity,
+        purpose: formData.purpose,
+        projectCode: formData.projectCode || undefined,
+        equipmentCode: formData.equipmentCode || undefined,
+        observations: formData.observations || undefined,
+      });
+      toast({ title: 'Movimentação atualizada', description: `${formData.type} - ${selectedProduct.code}` });
+    } else {
+      addMovement({
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().slice(0, 5),
+        productId: selectedProduct.id,
+        productCode: selectedProduct.code,
+        productDescription: selectedProduct.description,
+        type: formData.type,
+        quantity: formData.quantity,
+        origin: formData.type === 'ENTRADA' ? 'EXTERNO' : resolvedAddress,
+        destination: formData.type === 'ENTRADA' ? resolvedAddress : formData.destination ? resolvedAddress : 'N/A',
+        purpose: formData.purpose,
+        projectCode: formData.projectCode || undefined,
+        equipmentCode: formData.equipmentCode || undefined,
+        collaborator: currentUser || 'Sistema',
+        observations: formData.observations || undefined,
+      });
+      toast({ title: 'Movimentação registrada', description: `${formData.type} de ${formData.quantity} ${selectedProduct.unit} - ${selectedProduct.code}` });
+    }
 
     setIsDialogOpen(false);
+    setEditingMovement(null);
     setFormData({
       productId: '',
       type: 'SAIDA',
@@ -138,6 +153,26 @@ export default function Movimentacoes() {
       equipmentCode: '',
       observations: '',
     });
+  };
+
+  const handleEdit = (movement: typeof movements[0]) => {
+    setEditingMovement(movement.id);
+    setFormData({
+      productId: movement.productId,
+      type: movement.type,
+      quantity: movement.quantity,
+      destination: '',
+      purpose: movement.purpose,
+      projectCode: movement.projectCode || '',
+      equipmentCode: movement.equipmentCode || '',
+      observations: movement.observations || '',
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    deleteMovement(id);
+    toast({ title: 'Movimentação excluída', description: 'O estoque foi ajustado automaticamente.' });
   };
 
   const getTypeInfo = (type: MovementType) => MOVEMENT_TYPES.find(t => t.value === type);
@@ -160,7 +195,7 @@ export default function Movimentacoes() {
               </DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Registrar Movimentação</DialogTitle>
+                  <DialogTitle>{editingMovement ? 'Editar Movimentação' : 'Registrar Movimentação'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Movement Type Selector */}
@@ -364,12 +399,13 @@ export default function Movimentacoes() {
                   <TableHead className="font-semibold">Finalidade</TableHead>
                   <TableHead className="font-semibold">Projeto</TableHead>
                   <TableHead className="font-semibold">Colaborador</TableHead>
+                  <TableHead className="font-semibold text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredMovements.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                       Nenhuma movimentação encontrada
                     </TableCell>
                   </TableRow>
@@ -406,6 +442,46 @@ export default function Movimentacoes() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {movement.collaborator}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <TooltipProvider>
+                            <div className="flex items-center justify-end gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(movement)}>
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Editar</TooltipContent>
+                              </Tooltip>
+                              <AlertDialog>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <AlertDialogTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Excluir</TooltipContent>
+                                </Tooltip>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Excluir movimentação?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta ação irá reverter o impacto no estoque ({movement.type === 'ENTRADA' || movement.type === 'DEVOLUCAO' ? '-' : '+'}{movement.quantity} {products.find(p => p.id === movement.productId)?.unit || 'UN'} de {movement.productCode}).
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDelete(movement.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TooltipProvider>
                         </TableCell>
                       </TableRow>
                     );

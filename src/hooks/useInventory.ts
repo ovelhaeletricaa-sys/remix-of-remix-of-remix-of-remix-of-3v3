@@ -230,6 +230,69 @@ export function useInventory() {
     return newMovement;
   }, []);
 
+  const updateMovement = useCallback((id: string, updates: Partial<Movement>) => {
+    setMovements(prev => {
+      const old = prev.find(m => m.id === id);
+      if (!old) return prev;
+
+      const updated = prev.map(m => m.id === id ? { ...m, ...updates } : m);
+      setStorageItem(STORAGE_KEYS.MOVEMENTS, updated);
+
+      // Reverse old stock impact and apply new
+      if (updates.quantity !== undefined || updates.type !== undefined) {
+        const oldQty = old.quantity;
+        const oldType = old.type;
+        const newQty = updates.quantity ?? oldQty;
+        const newType = updates.type ?? oldType;
+
+        setProducts(prev => {
+          return prev.map(p => {
+            if (p.id === old.productId) {
+              let stock = p.currentStock;
+              // Reverse old
+              if (['ENTRADA', 'DEVOLUCAO'].includes(oldType)) stock -= oldQty;
+              else if (['SAIDA', 'AVARIA', 'PERDA'].includes(oldType)) stock += oldQty;
+              // Apply new
+              if (['ENTRADA', 'DEVOLUCAO'].includes(newType)) stock += newQty;
+              else if (['SAIDA', 'AVARIA', 'PERDA'].includes(newType)) stock -= newQty;
+              const result = { ...p, currentStock: Math.max(0, stock), updatedAt: new Date().toISOString() };
+              return result;
+            }
+            return p;
+          });
+        });
+      }
+
+      return updated;
+    });
+  }, []);
+
+  const deleteMovement = useCallback((id: string) => {
+    setMovements(prev => {
+      const movement = prev.find(m => m.id === id);
+      if (!movement) return prev;
+
+      // Reverse stock impact
+      setProducts(prevProducts => {
+        const updated = prevProducts.map(p => {
+          if (p.id === movement.productId) {
+            let stock = p.currentStock;
+            if (['ENTRADA', 'DEVOLUCAO'].includes(movement.type)) stock -= movement.quantity;
+            else if (['SAIDA', 'AVARIA', 'PERDA'].includes(movement.type)) stock += movement.quantity;
+            return { ...p, currentStock: Math.max(0, stock), updatedAt: new Date().toISOString() };
+          }
+          return p;
+        });
+        setStorageItem(STORAGE_KEYS.PRODUCTS, updated);
+        return updated;
+      });
+
+      const updated = prev.filter(m => m.id !== id);
+      setStorageItem(STORAGE_KEYS.MOVEMENTS, updated);
+      return updated;
+    });
+  }, []);
+
   const getFilteredMovements = useCallback((filter: MovementFilter) => {
     return movements.filter(m => {
       if (filter.startDate && m.date < filter.startDate) return false;
@@ -560,6 +623,8 @@ export function useInventory() {
     
     // Movement operations
     addMovement,
+    updateMovement,
+    deleteMovement,
     getFilteredMovements,
     
     // Location operations
