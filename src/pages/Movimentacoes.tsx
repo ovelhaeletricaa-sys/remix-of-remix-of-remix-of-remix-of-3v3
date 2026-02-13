@@ -258,10 +258,11 @@ export default function Movimentacoes() {
                     </Label>
                     {(() => {
                       // Build address options based on selected product
+                      const normalizeAddr = (s: string) => s.replace(/[\s\-]+/g, '').toUpperCase();
                       const productLocations = selectedProduct
                         ? locations.filter(loc => 
                             loc.products.includes(selectedProduct.id) || 
-                            selectedProduct.location === loc.description
+                            normalizeAddr(loc.description).includes(normalizeAddr(selectedProduct.location))
                           )
                         : [];
                       
