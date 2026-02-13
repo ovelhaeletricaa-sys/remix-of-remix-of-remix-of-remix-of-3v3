@@ -259,7 +259,10 @@ export default function Movimentacoes() {
                     {(() => {
                       // Build address options based on selected product
                       const productLocations = selectedProduct
-                        ? locations.filter(loc => loc.products.includes(selectedProduct.id))
+                        ? locations.filter(loc => 
+                            loc.products.includes(selectedProduct.id) || 
+                            selectedProduct.location === loc.description
+                          )
                         : [];
                       
                       const addressOptions = [
