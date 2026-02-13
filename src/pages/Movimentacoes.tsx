@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Plus, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, RefreshCw, AlertOctagon, XCircle, Search, Repeat, Pencil, Trash2 } from 'lucide-react';
+import { Plus, ArrowRightLeft, ArrowUpCircle, ArrowDownCircle, RefreshCw, AlertOctagon, XCircle, Search, Repeat, Pencil, Trash2, Boxes } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useInventoryContext } from '@/contexts/InventoryContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -22,6 +23,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { MovementType, MovementPurpose } from '@/types/inventory';
 import { MOVEMENT_PURPOSES } from '@/types/inventory';
+import type { ProductionExitType, ProductionOrderItem } from '@/types/composition';
+import { PRODUCTION_EXIT_TYPES } from '@/types/composition';
 import { useToast } from '@/hooks/use-toast';
 
 const MOVEMENT_TYPES: { value: MovementType; label: string; icon: React.ReactNode; color: string }[] = [
@@ -34,9 +37,10 @@ const MOVEMENT_TYPES: { value: MovementType; label: string; icon: React.ReactNod
 ];
 
 export default function Movimentacoes() {
-  const { movements, products, locations, currentUser, addMovement, updateMovement, deleteMovement } = useInventoryContext();
+  const { movements, products, locations, currentUser, compositions, addMovement, updateMovement, deleteMovement, addProductionOrder } = useInventoryContext();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
   const [editingMovement, setEditingMovement] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -51,6 +55,13 @@ export default function Movimentacoes() {
     equipmentCode: '',
     observations: '',
   });
+
+  // Production composition state
+  const [selectedCompositionId, setSelectedCompositionId] = useState('');
+  const [exitType, setExitType] = useState<ProductionExitType>('INTEGRAL');
+  const [productionItems, setProductionItems] = useState<ProductionOrderItem[]>([]);
+  const [productionProjectCode, setProductionProjectCode] = useState('');
+  const [productionObservations, setProductionObservations] = useState('');
 
   const filteredMovements = movements.filter(m => {
     const matchesSearch = 
@@ -175,6 +186,116 @@ export default function Movimentacoes() {
     toast({ title: 'Movimentação excluída', description: 'O estoque foi ajustado automaticamente.' });
   };
 
+  // Composition options for production
+  const activeCompositions = compositions.filter(c => c.isActive);
+  const compositionOptions = activeCompositions.map(c => ({
+    value: c.id,
+    label: `${c.code} - ${c.name}`,
+    sublabel: `${c.items.length} itens`,
+  }));
+
+  const handleSelectComposition = (compId: string) => {
+    setSelectedCompositionId(compId);
+    const comp = compositions.find(c => c.id === compId);
+    if (!comp) return;
+    setProductionItems(comp.items.map(item => {
+      const prod = products.find(p => p.id === item.productId);
+      return {
+        productId: item.productId,
+        productCode: item.productCode,
+        productDescription: item.productDescription,
+        requiredQty: item.quantity,
+        deliveredQty: item.quantity,
+        unit: item.unit,
+        selected: true,
+      };
+    }));
+  };
+
+  const handleProductionSubmit = () => {
+    const comp = compositions.find(c => c.id === selectedCompositionId);
+    if (!comp) return;
+
+    const itemsToProcess = exitType === 'INTEGRAL'
+      ? productionItems
+      : productionItems.filter(i => i.selected);
+
+    if (itemsToProcess.length === 0) {
+      toast({ title: 'Selecione ao menos um item', variant: 'destructive' });
+      return;
+    }
+
+    // Validate stock
+    for (const item of itemsToProcess) {
+      const prod = products.find(p => p.id === item.productId);
+      if (!prod) continue;
+      const qty = exitType === 'FRACIONADA' ? item.deliveredQty : item.requiredQty;
+      if (qty > prod.currentStock) {
+        toast({
+          title: 'Saldo insuficiente',
+          description: `${item.productCode}: estoque ${prod.currentStock}, solicitado ${qty}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    const now = new Date();
+    const movementIds: string[] = [];
+
+    for (const item of itemsToProcess) {
+      const prod = products.find(p => p.id === item.productId);
+      if (!prod) continue;
+      const qty = exitType === 'FRACIONADA' ? item.deliveredQty : item.requiredQty;
+      
+      const mov = addMovement({
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().slice(0, 5),
+        productId: prod.id,
+        productCode: prod.code,
+        productDescription: prod.description,
+        type: 'SAIDA',
+        quantity: qty,
+        origin: prod.location || 'SEM ENDEREÇO',
+        destination: 'PRODUÇÃO',
+        purpose: 'PRODUCAO',
+        projectCode: productionProjectCode || undefined,
+        equipmentCode: comp.code,
+        collaborator: currentUser || 'Sistema',
+        observations: productionObservations || `Composição: ${comp.code} - ${comp.name} (${exitType})`,
+      });
+      movementIds.push(mov.id);
+    }
+
+    // Create production order for traceability
+    addProductionOrder({
+      compositionId: comp.id,
+      compositionCode: comp.code,
+      compositionName: comp.name,
+      projectCode: productionProjectCode,
+      exitType,
+      items: itemsToProcess.map(i => ({
+        ...i,
+        deliveredQty: exitType === 'FRACIONADA' ? i.deliveredQty : i.requiredQty,
+      })),
+      status: exitType === 'INTEGRAL' ? 'CONCLUIDA' : itemsToProcess.length < comp.items.length ? 'PARCIAL' : 'CONCLUIDA',
+      collaborator: currentUser || 'Sistema',
+      movementIds,
+    });
+
+    toast({
+      title: 'Saída para produção registrada',
+      description: `${itemsToProcess.length} itens da composição ${comp.code} baixados do estoque.`,
+    });
+
+    setIsProductionDialogOpen(false);
+    setSelectedCompositionId('');
+    setExitType('INTEGRAL');
+    setProductionItems([]);
+    setProductionProjectCode('');
+    setProductionObservations('');
+  };
+
   const getTypeInfo = (type: MovementType) => MOVEMENT_TYPES.find(t => t.value === type);
 
   return (
@@ -186,7 +307,12 @@ export default function Movimentacoes() {
               <ArrowRightLeft className="h-5 w-5" />
               Histórico de Movimentações
             </CardTitle>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsProductionDialogOpen(true)} disabled={activeCompositions.length === 0}>
+                <Boxes className="mr-2 h-4 w-4" />
+                Saída Produção
+              </Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
@@ -362,6 +488,7 @@ export default function Movimentacoes() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -496,6 +623,178 @@ export default function Movimentacoes() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Production Composition Dialog */}
+      <Dialog open={isProductionDialogOpen} onOpenChange={setIsProductionDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Boxes className="h-5 w-5" />
+              Saída para Produção - Composição
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Composition Selection */}
+            <div className="space-y-2">
+              <Label>Composição</Label>
+              <SearchableSelect
+                options={compositionOptions}
+                value={selectedCompositionId}
+                onValueChange={handleSelectComposition}
+                placeholder="Selecione a composição..."
+                searchPlaceholder="Buscar composição..."
+                emptyMessage="Nenhuma composição ativa."
+              />
+            </div>
+
+            {/* Project Code */}
+            <div className="space-y-2">
+              <Label>Código do Projeto</Label>
+              <Input
+                value={productionProjectCode}
+                onChange={e => setProductionProjectCode(e.target.value)}
+                placeholder="Ex: PRD01733, 0000000726"
+              />
+            </div>
+
+            {/* Exit Type */}
+            {selectedCompositionId && (
+              <div className="space-y-2">
+                <Label>Tipo de Saída</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PRODUCTION_EXIT_TYPES.map(t => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => {
+                        setExitType(t.value);
+                        if (t.value === 'INTEGRAL') {
+                          setProductionItems(prev => prev.map(i => ({ ...i, selected: true })));
+                        }
+                      }}
+                      className={`rounded-lg border p-3 text-left text-sm transition-all ${
+                        exitType === t.value
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                    >
+                      <p className="font-medium">{t.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{t.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Items Table */}
+            {productionItems.length > 0 && (
+              <div className="space-y-2">
+                <Label>Itens ({productionItems.filter(i => i.selected).length}/{productionItems.length} selecionados)</Label>
+                <div className="rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {exitType !== 'INTEGRAL' && <TableHead className="w-10"></TableHead>}
+                        <TableHead>Produto</TableHead>
+                        <TableHead className="text-right">Necessário</TableHead>
+                        {exitType === 'FRACIONADA' && <TableHead className="text-right">Qtd Saída</TableHead>}
+                        <TableHead className="text-right">Estoque</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {productionItems.map((item, idx) => {
+                        const prod = products.find(p => p.id === item.productId);
+                        const stock = prod?.currentStock ?? 0;
+                        const qtyNeeded = exitType === 'FRACIONADA' ? item.deliveredQty : item.requiredQty;
+                        const sufficient = stock >= qtyNeeded;
+                        return (
+                          <TableRow key={item.productId} className={!item.selected && exitType !== 'INTEGRAL' ? 'opacity-40' : ''}>
+                            {exitType !== 'INTEGRAL' && (
+                              <TableCell>
+                                <Checkbox
+                                  checked={item.selected}
+                                  onCheckedChange={(checked) => {
+                                    setProductionItems(prev => prev.map((i, j) =>
+                                      j === idx ? { ...i, selected: !!checked } : i
+                                    ));
+                                  }}
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell>
+                              <p className="font-mono text-xs">{item.productCode}</p>
+                              <p className="max-w-[200px] truncate text-xs text-muted-foreground">{item.productDescription}</p>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{item.requiredQty} {item.unit}</TableCell>
+                            {exitType === 'FRACIONADA' && (
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max={stock}
+                                  value={item.deliveredQty}
+                                  onChange={e => {
+                                    const val = parseInt(e.target.value) || 1;
+                                    setProductionItems(prev => prev.map((i, j) =>
+                                      j === idx ? { ...i, deliveredQty: val } : i
+                                    ));
+                                  }}
+                                  className="h-8 w-20 ml-auto text-right"
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell className={`text-right font-medium ${sufficient ? 'text-success' : 'text-destructive'}`}>
+                              {stock} {item.unit}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {sufficient ? (
+                                <Badge className="bg-success text-success-foreground">OK</Badge>
+                              ) : (
+                                <Badge variant="destructive">Insuficiente</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {/* Observations */}
+            <div className="space-y-2">
+              <Label>Observações</Label>
+              <Textarea
+                value={productionObservations}
+                onChange={e => setProductionObservations(e.target.value)}
+                rows={2}
+                placeholder="Nº pedido, NF, motivo..."
+              />
+            </div>
+
+            {/* User Info */}
+            <div className="rounded-lg bg-muted p-3 text-sm">
+              <p className="text-muted-foreground">
+                Registrado por: <span className="font-medium text-foreground">{currentUser || 'Sistema'}</span>
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsProductionDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleProductionSubmit}
+                disabled={!selectedCompositionId || productionItems.filter(i => i.selected).length === 0}
+              >
+                Confirmar Saída
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

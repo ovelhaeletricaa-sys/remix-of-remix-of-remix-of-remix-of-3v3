@@ -7,7 +7,8 @@ import {
   Bell, 
   FileBarChart,
   Warehouse,
-  ChevronRight
+  ChevronRight,
+  Boxes,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInventoryContext } from '@/contexts/InventoryContext';
@@ -16,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Produtos', href: '/produtos', icon: Package },
+  { name: 'Composições', href: '/composicoes', icon: Boxes },
   { name: 'Armazém', href: '/armazem', icon: MapPin },
   { name: 'Movimentações', href: '/movimentacoes', icon: ArrowRightLeft },
   { name: 'Alertas', href: '/alertas', icon: Bell },

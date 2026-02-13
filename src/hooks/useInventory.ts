@@ -11,8 +11,10 @@ import type {
   WarehouseAlert,
   WarehouseAlertType,
 } from '@/types/inventory';
+import type { Composition, ProductionOrder } from '@/types/composition';
 import { getStorageItem, setStorageItem, generateId, STORAGE_KEYS } from '@/lib/storage';
 import { seedProducts, seedLocations, seedCollaborators, generateSeedMovements } from '@/lib/seedData';
+import { seedCompositions } from '@/lib/seedCompositions';
 
 export function useInventory() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -22,6 +24,8 @@ export function useInventory() {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [storageStructures, setStorageStructures] = useState<StorageStructure[]>([]);
   const [currentUser, setCurrentUser] = useState<string>('');
+  const [compositions, setCompositions] = useState<Composition[]>([]);
+  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Initialize data from localStorage or seed data
@@ -68,6 +72,17 @@ export function useInventory() {
 
     const storedStructures = getStorageItem<StorageStructure[]>(STORAGE_KEYS.STORAGE_STRUCTURES, []);
     setStorageStructures(storedStructures);
+
+    const storedCompositions = getStorageItem<Composition[]>(STORAGE_KEYS.COMPOSITIONS, []);
+    if (storedCompositions.length === 0) {
+      setCompositions(seedCompositions);
+      setStorageItem(STORAGE_KEYS.COMPOSITIONS, seedCompositions);
+    } else {
+      setCompositions(storedCompositions);
+    }
+
+    const storedOrders = getStorageItem<ProductionOrder[]>(STORAGE_KEYS.PRODUCTION_ORDERS, []);
+    setProductionOrders(storedOrders);
 
     setAlerts(storedAlerts);
     setCurrentUser(storedUser);
@@ -565,6 +580,67 @@ export function useInventory() {
       .map(s => s.location);
   }, [products, locations]);
 
+  // Composition operations
+  const addComposition = useCallback((comp: Omit<Composition, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString();
+    const newComp: Composition = { ...comp, id: generateId(), createdAt: now, updatedAt: now };
+    setCompositions(prev => {
+      const updated = [...prev, newComp];
+      setStorageItem(STORAGE_KEYS.COMPOSITIONS, updated);
+      return updated;
+    });
+    return newComp;
+  }, []);
+
+  const updateComposition = useCallback((id: string, updates: Partial<Composition>) => {
+    setCompositions(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c);
+      setStorageItem(STORAGE_KEYS.COMPOSITIONS, updated);
+      return updated;
+    });
+  }, []);
+
+  const deleteComposition = useCallback((id: string) => {
+    setCompositions(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      setStorageItem(STORAGE_KEYS.COMPOSITIONS, updated);
+      return updated;
+    });
+  }, []);
+
+  const importCompositions = useCallback((comps: Omit<Composition, 'id' | 'createdAt' | 'updatedAt'>[]) => {
+    const now = new Date().toISOString();
+    setCompositions(prev => {
+      const existingCodes = new Set(prev.map(c => c.code.toUpperCase()));
+      const newComps = comps
+        .filter(c => !existingCodes.has(c.code.toUpperCase()))
+        .map(c => ({ ...c, id: generateId(), createdAt: now, updatedAt: now } as Composition));
+      const updated = [...prev, ...newComps];
+      setStorageItem(STORAGE_KEYS.COMPOSITIONS, updated);
+      return updated;
+    });
+  }, []);
+
+  // Production order operations
+  const addProductionOrder = useCallback((order: Omit<ProductionOrder, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString();
+    const newOrder: ProductionOrder = { ...order, id: generateId(), createdAt: now, updatedAt: now };
+    setProductionOrders(prev => {
+      const updated = [newOrder, ...prev];
+      setStorageItem(STORAGE_KEYS.PRODUCTION_ORDERS, updated);
+      return updated;
+    });
+    return newOrder;
+  }, []);
+
+  const updateProductionOrder = useCallback((id: string, updates: Partial<ProductionOrder>) => {
+    setProductionOrders(prev => {
+      const updated = prev.map(o => o.id === id ? { ...o, ...updates, updatedAt: new Date().toISOString() } : o);
+      setStorageItem(STORAGE_KEYS.PRODUCTION_ORDERS, updated);
+      return updated;
+    });
+  }, []);
+
   // Alert operations
   const markAlertAsRead = useCallback((id: string) => {
     setAlerts(prev => {
@@ -612,6 +688,8 @@ export function useInventory() {
     alerts,
     collaborators,
     storageStructures,
+    compositions,
+    productionOrders,
     currentUser,
     isLoading,
     
@@ -639,6 +717,16 @@ export function useInventory() {
     updateStorageStructure,
     deleteStorageStructure,
     generateLocationsFromStructure,
+    
+    // Composition operations
+    addComposition,
+    updateComposition,
+    deleteComposition,
+    importCompositions,
+    
+    // Production order operations
+    addProductionOrder,
+    updateProductionOrder,
     
     // Warehouse intelligence
     getWarehouseAlerts,

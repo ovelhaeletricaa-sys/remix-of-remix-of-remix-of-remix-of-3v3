@@ -8,6 +8,8 @@ const STORAGE_KEYS = {
   COLLABORATORS: 'inventory_collaborators',
   CURRENT_USER: 'inventory_current_user',
   STORAGE_STRUCTURES: 'inventory_storage_structures',
+  COMPOSITIONS: 'inventory_compositions',
+  PRODUCTION_ORDERS: 'inventory_production_orders',
 } as const;
 
 export function getStorageItem<T>(key: string, defaultValue: T): T {

@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { InventoryProvider } from "@/contexts/InventoryContext";
 import Dashboard from "./pages/Dashboard";
 import Produtos from "./pages/Produtos";
+import Composicoes from "./pages/Composicoes";
 import Armazem from "./pages/Armazem";
 import Movimentacoes from "./pages/Movimentacoes";
 import Alertas from "./pages/Alertas";
@@ -24,6 +25,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/produtos" element={<Produtos />} />
+            <Route path="/composicoes" element={<Composicoes />} />
             <Route path="/armazem" element={<Armazem />} />
             <Route path="/movimentacoes" element={<Movimentacoes />} />
             <Route path="/alertas" element={<Alertas />} />
