@@ -20,6 +20,7 @@ export interface SearchableSelectOption {
   value: string;
   label: string;
   sublabel?: string;
+  keywords?: string[];
 }
 
 interface SearchableSelectProps {
@@ -79,6 +80,7 @@ export function SearchableSelect({
                 <CommandItem
                   key={option.value}
                   value={option.label + (option.sublabel ? ' ' + option.sublabel : '')}
+                  keywords={option.keywords}
                   onSelect={() => {
                     onValueChange(option.value);
                     setOpen(false);
