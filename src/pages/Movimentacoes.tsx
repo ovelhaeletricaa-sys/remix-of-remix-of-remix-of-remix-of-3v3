@@ -61,6 +61,7 @@ export default function Movimentacoes() {
     value: p.id,
     label: `${p.code} - ${p.description}`,
     sublabel: `Estoque: ${p.currentStock} ${p.unit} · ${p.location}`,
+    keywords: [p.code, p.description, p.code.replace(/[^a-zA-Z0-9]/g, '')],
   }));
 
   const purposeOptions = MOVEMENT_PURPOSES.map(p => ({
@@ -98,6 +99,12 @@ export default function Movimentacoes() {
     }
 
     const now = new Date();
+    const resolvedAddress = formData.destination === '__sem_endereco__'
+      ? 'SEM ENDEREÇO'
+      : formData.destination === 'EXTERNO'
+        ? 'EXTERNO'
+        : locations.find(l => l.id === formData.destination)?.description || formData.destination;
+
     addMovement({
       date: now.toISOString().split('T')[0],
       time: now.toTimeString().slice(0, 5),
@@ -106,8 +113,8 @@ export default function Movimentacoes() {
       productDescription: selectedProduct.description,
       type: formData.type,
       quantity: formData.quantity,
-      origin: selectedProduct.location,
-      destination: formData.destination || 'N/A',
+      origin: formData.type === 'ENTRADA' ? 'EXTERNO' : resolvedAddress,
+      destination: formData.type === 'ENTRADA' ? resolvedAddress : formData.destination ? resolvedAddress : 'N/A',
       purpose: formData.purpose,
       projectCode: formData.projectCode || undefined,
       equipmentCode: formData.equipmentCode || undefined,
@@ -244,17 +251,46 @@ export default function Movimentacoes() {
                     </div>
                   )}
 
-                  {/* Destination */}
+                  {/* Origin/Destination Address */}
                   <div className="space-y-2">
-                    <Label htmlFor="destination">
+                    <Label>
                       {formData.type === 'ENTRADA' ? 'Destino (endereço)' : 'Endereço de origem'}
                     </Label>
-                    <Input
-                      id="destination"
-                      value={formData.destination}
-                      onChange={e => setFormData(f => ({ ...f, destination: e.target.value }))}
-                      placeholder="STNT01-PRAT01 ou EXTERNO"
-                    />
+                    {(() => {
+                      // Build address options based on selected product
+                      const productLocations = selectedProduct
+                        ? locations.filter(loc => loc.products.includes(selectedProduct.id))
+                        : [];
+                      
+                      const addressOptions = [
+                        ...productLocations.map(loc => ({
+                          value: loc.id,
+                          label: loc.description,
+                          sublabel: `${loc.type} · ${loc.products.length} produto(s)`,
+                        })),
+                        ...(selectedProduct && productLocations.length === 0
+                          ? [{ value: '__sem_endereco__', label: 'Sem endereço (produto não endereçado)', sublabel: 'Produto ainda não alocado em nenhum endereço' }]
+                          : []),
+                        { value: 'EXTERNO', label: 'Externo', sublabel: 'Origem/destino externo ao armazém' },
+                      ];
+
+                      return (
+                        <SearchableSelect
+                          options={addressOptions}
+                          value={formData.destination}
+                          onValueChange={value => setFormData(f => ({ ...f, destination: value }))}
+                          placeholder={selectedProduct ? 'Selecione o endereço' : 'Selecione um produto primeiro'}
+                          searchPlaceholder="Buscar endereço..."
+                          emptyMessage="Nenhum endereço encontrado."
+                          disabled={!selectedProduct}
+                        />
+                      );
+                    })()}
+                    {formData.destination === '__sem_endereco__' && (
+                      <p className="text-xs text-warning">
+                        ⚠ Este produto ainda não possui endereçamento. Realize o endereçamento no módulo Armazém.
+                      </p>
+                    )}
                   </div>
 
                   {/* Observations */}
