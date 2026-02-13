@@ -641,6 +641,71 @@ export function useInventory() {
     });
   }, []);
 
+  const cancelProductionOrder = useCallback((id: string) => {
+    const order = productionOrders.find(o => o.id === id);
+    if (!order || order.status === 'CANCELADA') return;
+
+    const now = new Date();
+    const returnMovementIds: string[] = [];
+
+    // Reverse each linked movement
+    for (const movId of order.movementIds) {
+      const mov = movements.find(m => m.id === movId);
+      if (!mov) continue;
+
+      // Increment stock back
+      setProducts(prev => {
+        const updated = prev.map(p => {
+          if (p.id === mov.productId) {
+            return { ...p, currentStock: p.currentStock + mov.quantity, updatedAt: now.toISOString() };
+          }
+          return p;
+        });
+        setStorageItem(STORAGE_KEYS.PRODUCTS, updated);
+        return updated;
+      });
+
+      // Create return movement
+      const returnMov: Movement = {
+        id: generateId(),
+        date: now.toISOString().split('T')[0],
+        time: now.toTimeString().slice(0, 5),
+        productId: mov.productId,
+        productCode: mov.productCode,
+        productDescription: mov.productDescription,
+        type: 'DEVOLUCAO',
+        quantity: mov.quantity,
+        origin: 'PRODUÇÃO',
+        destination: mov.origin,
+        purpose: 'PRODUCAO',
+        projectCode: mov.projectCode,
+        equipmentCode: mov.equipmentCode,
+        collaborator: currentUser || 'Sistema',
+        observations: `Devolução automática - Cancelamento da OP ${order.compositionCode} (${order.projectCode || 'sem projeto'})`,
+        createdAt: now.toISOString(),
+      };
+      returnMovementIds.push(returnMov.id);
+
+      setMovements(prev => {
+        const updated = [returnMov, ...prev];
+        setStorageItem(STORAGE_KEYS.MOVEMENTS, updated);
+        return updated;
+      });
+    }
+
+    // Update the order status
+    setProductionOrders(prev => {
+      const updated = prev.map(o => o.id === id ? {
+        ...o,
+        status: 'CANCELADA' as const,
+        productionStatus: 'CANCELADA' as const,
+        updatedAt: now.toISOString(),
+      } : o);
+      setStorageItem(STORAGE_KEYS.PRODUCTION_ORDERS, updated);
+      return updated;
+    });
+  }, [productionOrders, movements, currentUser]);
+
   // Alert operations
   const markAlertAsRead = useCallback((id: string) => {
     setAlerts(prev => {
@@ -727,6 +792,7 @@ export function useInventory() {
     // Production order operations
     addProductionOrder,
     updateProductionOrder,
+    cancelProductionOrder,
     
     // Warehouse intelligence
     getWarehouseAlerts,
