@@ -173,14 +173,37 @@ export interface Alert {
   createdAt: string;
 }
 
+export type CollaboratorBlockReason = 
+  | 'FERIAS'
+  | 'ATESTADO_MEDICO'
+  | 'AFASTAMENTO'
+  | 'DEMISSAO'
+  | 'LICENCA'
+  | 'OUTROS';
+
+export const COLLABORATOR_BLOCK_REASONS: { value: CollaboratorBlockReason; label: string }[] = [
+  { value: 'FERIAS', label: 'Férias' },
+  { value: 'ATESTADO_MEDICO', label: 'Atestado Médico' },
+  { value: 'AFASTAMENTO', label: 'Afastamento' },
+  { value: 'DEMISSAO', label: 'Demissão' },
+  { value: 'LICENCA', label: 'Licença' },
+  { value: 'OUTROS', label: 'Outros' },
+];
+
 export interface Collaborator {
   id: string;
   name: string;
   role: CollaboratorRole;
   isActive: boolean;
+  isBlocked?: boolean;
+  blockReason?: CollaboratorBlockReason;
+  blockReasonCustom?: string;
+  blockedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export type CollaboratorRole = 'OPERADOR' | 'SUPERVISOR' | 'GERENTE' | 'ALMOXARIFE';
+export type CollaboratorRole = 'OPERADOR' | 'SUPERVISOR' | 'GERENTE' | 'ALMOXARIFE' | 'ANALISTA_ESTOQUE';
 
 export interface DashboardStats {
   totalProducts: number;

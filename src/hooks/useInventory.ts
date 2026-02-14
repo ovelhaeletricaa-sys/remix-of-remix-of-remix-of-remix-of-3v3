@@ -738,6 +738,71 @@ export function useInventory() {
     });
   }, []);
 
+  // Collaborator CRUD operations
+  const addCollaborator = useCallback((collab: Omit<Collaborator, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString();
+    const newCollab: Collaborator = { ...collab, id: generateId(), createdAt: now, updatedAt: now };
+    setCollaborators(prev => {
+      const updated = [...prev, newCollab];
+      setStorageItem(STORAGE_KEYS.COLLABORATORS, updated);
+      return updated;
+    });
+    return newCollab;
+  }, []);
+
+  const updateCollaborator = useCallback((id: string, updates: Partial<Collaborator>) => {
+    setCollaborators(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c);
+      setStorageItem(STORAGE_KEYS.COLLABORATORS, updated);
+      return updated;
+    });
+  }, []);
+
+  const deleteCollaborator = useCallback((id: string) => {
+    setCollaborators(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      setStorageItem(STORAGE_KEYS.COLLABORATORS, updated);
+      return updated;
+    });
+    // If deleted user was current, clear
+    setCollaborators(prev => {
+      const deleted = !prev.find(c => c.id === id && c.name === currentUser);
+      return prev;
+    });
+  }, [currentUser]);
+
+  const blockCollaborator = useCallback((id: string, blockReason: string, blockReasonCustom?: string) => {
+    setCollaborators(prev => {
+      const updated = prev.map(c => c.id === id ? {
+        ...c,
+        isBlocked: true,
+        isActive: false,
+        blockReason: blockReason as any,
+        blockReasonCustom,
+        blockedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } : c);
+      setStorageItem(STORAGE_KEYS.COLLABORATORS, updated);
+      return updated;
+    });
+  }, []);
+
+  const unblockCollaborator = useCallback((id: string) => {
+    setCollaborators(prev => {
+      const updated = prev.map(c => c.id === id ? {
+        ...c,
+        isBlocked: false,
+        isActive: true,
+        blockReason: undefined,
+        blockReasonCustom: undefined,
+        blockedAt: undefined,
+        updatedAt: new Date().toISOString(),
+      } : c);
+      setStorageItem(STORAGE_KEYS.COLLABORATORS, updated);
+      return updated;
+    });
+  }, []);
+
   // User operations
   const setUser = useCallback((name: string) => {
     setCurrentUser(name);
@@ -812,6 +877,13 @@ export function useInventory() {
     // Warehouse intelligence
     getWarehouseAlerts,
     getSuggestedLocation,
+    
+    // Collaborator operations
+    addCollaborator,
+    updateCollaborator,
+    deleteCollaborator,
+    blockCollaborator,
+    unblockCollaborator,
     
     // Alert operations
     markAlertAsRead,

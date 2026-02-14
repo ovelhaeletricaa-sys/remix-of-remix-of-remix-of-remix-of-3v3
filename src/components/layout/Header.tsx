@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useInventoryContext } from '@/contexts/InventoryContext';
+import { CollaboratorManagementDialog } from '@/components/collaborators/CollaboratorManagementDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +21,7 @@ interface HeaderProps {
 export function Header({ title, subtitle }: HeaderProps) {
   const { alerts, currentUser, collaborators, setUser } = useInventoryContext();
   const unreadAlerts = alerts.filter(a => !a.isRead).length;
+  const activeCollaborators = collaborators.filter(c => !c.isBlocked);
 
   return (
     <header className="sticky top-0 z-40 flex h-[72px] items-center justify-between border-b border-border/60 bg-background/80 px-8 backdrop-blur-xl">
@@ -40,6 +42,9 @@ export function Header({ title, subtitle }: HeaderProps) {
           />
         </div>
 
+        {/* Collaborator Management */}
+        <CollaboratorManagementDialog />
+
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground">
           <Bell className="h-[18px] w-[18px]" />
@@ -53,7 +58,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         {/* Separator */}
         <div className="mx-1 h-6 w-px bg-border/60" />
 
-        {/* User */}
+        {/* User selector - only active/unblocked collaborators */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-9 gap-2.5 rounded-lg px-2 text-[13px] font-medium text-muted-foreground hover:text-foreground">
@@ -68,7 +73,7 @@ export function Header({ title, subtitle }: HeaderProps) {
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel className="text-xs text-muted-foreground">Colaborador</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {collaborators.map((collab) => (
+            {activeCollaborators.map((collab) => (
               <DropdownMenuItem 
                 key={collab.id}
                 onClick={() => setUser(collab.name)}
