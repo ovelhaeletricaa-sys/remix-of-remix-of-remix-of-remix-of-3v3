@@ -608,16 +608,31 @@ export function useInventory() {
     });
   }, []);
 
-  const importCompositions = useCallback((comps: Omit<Composition, 'id' | 'createdAt' | 'updatedAt'>[]) => {
+  const importCompositions = useCallback((comps: Omit<Composition, 'id' | 'createdAt' | 'updatedAt'>[], updateExisting = false) => {
     const now = new Date().toISOString();
     setCompositions(prev => {
-      const existingCodes = new Set(prev.map(c => c.code.toUpperCase()));
-      const newComps = comps
-        .filter(c => !existingCodes.has(c.code.toUpperCase()))
-        .map(c => ({ ...c, id: generateId(), createdAt: now, updatedAt: now } as Composition));
-      const updated = [...prev, ...newComps];
-      setStorageItem(STORAGE_KEYS.COMPOSITIONS, updated);
-      return updated;
+      const existingMap = new Map(prev.map(c => [c.code.toUpperCase(), c]));
+      const result = [...prev];
+
+      for (const comp of comps) {
+        const key = comp.code.toUpperCase();
+        const existing = existingMap.get(key);
+        if (existing) {
+          if (updateExisting) {
+            const idx = result.findIndex(c => c.id === existing.id);
+            if (idx !== -1) {
+              result[idx] = { ...existing, ...comp, id: existing.id, createdAt: existing.createdAt, updatedAt: now };
+            }
+          }
+        } else {
+          const newComp: Composition = { ...comp, id: generateId(), createdAt: now, updatedAt: now };
+          result.push(newComp);
+          existingMap.set(key, newComp);
+        }
+      }
+
+      setStorageItem(STORAGE_KEYS.COMPOSITIONS, result);
+      return result;
     });
   }, []);
 

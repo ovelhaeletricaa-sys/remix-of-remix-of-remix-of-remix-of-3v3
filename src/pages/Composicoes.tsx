@@ -21,14 +21,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useToast } from '@/hooks/use-toast';
+import { CompositionImportDialog } from '@/components/compositions/CompositionImportDialog';
 import type { Composition, CompositionItem } from '@/types/composition';
-import * as XLSX from 'xlsx';
 
 export default function Composicoes() {
   const { compositions, products, addComposition, updateComposition, deleteComposition, importCompositions } = useInventoryContext();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
 
@@ -143,72 +144,7 @@ export default function Composicoes() {
     toast({ title: comp.isActive ? 'Composição desativada' : 'Composição ativada' });
   };
 
-  // Import from spreadsheet
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
-
-        // Expected columns: Código Composição, Nome, Descrição, Código Produto, Quantidade
-        const groupedByCode = new Map<string, { name: string; description: string; items: CompositionItem[] }>();
-
-        for (const row of rows) {
-          const compCode = row['Código Composição'] || row['codigo_composicao'] || '';
-          const compName = row['Nome'] || row['nome'] || '';
-          const compDesc = row['Descrição'] || row['descricao'] || '';
-          const prodCode = row['Código Produto'] || row['codigo_produto'] || '';
-          const qty = parseInt(row['Quantidade'] || row['quantidade'] || '1') || 1;
-
-          if (!compCode || !prodCode) continue;
-
-          const product = products.find(p => p.code.toUpperCase() === prodCode.toUpperCase());
-          if (!product) continue;
-
-          if (!groupedByCode.has(compCode)) {
-            groupedByCode.set(compCode, { name: compName, description: compDesc, items: [] });
-          }
-          const group = groupedByCode.get(compCode)!;
-          group.items.push({
-            productId: product.id,
-            productCode: product.code,
-            productDescription: product.description,
-            quantity: qty,
-            unit: product.unit,
-          });
-        }
-
-        const comps: Omit<Composition, 'id' | 'createdAt' | 'updatedAt'>[] = [];
-        groupedByCode.forEach((val, code) => {
-          comps.push({
-            code,
-            name: val.name || code,
-            description: val.description,
-            items: val.items,
-            isActive: true,
-          });
-        });
-
-        if (comps.length === 0) {
-          toast({ title: 'Nenhuma composição válida encontrada', variant: 'destructive' });
-          return;
-        }
-
-        importCompositions(comps);
-        toast({ title: `${comps.length} composição(ões) importada(s)` });
-      } catch {
-        toast({ title: 'Erro ao importar arquivo', variant: 'destructive' });
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    e.target.value = '';
-  };
+  // Import handled by CompositionImportDialog
 
   return (
     <AppLayout title="Composições" subtitle="Gestão de composições de equipamentos (BOM)">
@@ -271,12 +207,9 @@ export default function Composicoes() {
               Composições de Equipamentos
             </CardTitle>
             <div className="flex gap-2">
-              <label>
-                <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
-                <Button variant="outline" asChild>
-                  <span><Upload className="mr-2 h-4 w-4" />Importar</span>
-                </Button>
-              </label>
+              <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />Importar
+              </Button>
               <Button onClick={openNew}>
                 <Plus className="mr-2 h-4 w-4" />
                 Nova Composição
@@ -492,6 +425,17 @@ export default function Composicoes() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <CompositionImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        existingCompositions={compositions}
+        products={products}
+        onImport={(comps, updateExisting) => {
+          importCompositions(comps, updateExisting);
+          toast({ title: `${comps.length} composição(ões) importada(s)` });
+        }}
+      />
     </AppLayout>
   );
 }
