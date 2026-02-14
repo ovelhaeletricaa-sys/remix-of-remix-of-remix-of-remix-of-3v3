@@ -1,109 +1,180 @@
 
 
-# Importacao Inteligente de Composicoes (BOM) via Planilha OMIE
+# Modulo de Inventarios
 
-## Contexto
+## Visao Geral
 
-A planilha exportada do OMIE possui uma estrutura onde cada linha representa um insumo de um produto acabado. O produto acabado se repete em varias linhas consecutivas, e cada linha traz um item/insumo diferente. O importador atual espera colunas especificas ("Codigo Composicao", "Codigo Produto") que nao correspondem ao formato real.
+Criar uma nova pagina `/inventarios` com funcionalidades completas de contagem de estoque, incluindo sugestoes automaticas, metodos flexiveis, cronogramas rotativos e acompanhamento de divergencias.
 
-## Colunas relevantes da planilha OMIE
+---
 
-| Coluna | Uso |
-|--------|-----|
-| Codigo do Produto | Codigo do Produto Acabado (agrupa a composicao) |
-| Descricao do Produto | Nome da composicao |
-| Codigo do Item | Codigo do insumo/componente |
-| Descricao do Item | Nome do insumo |
-| Quantidade do Item | Quantidade necessaria |
-| Unidade do Item | Unidade de medida do insumo |
+## Estrutura de Dados
 
-## O que sera implementado
+### Novos tipos em `src/types/inventory.ts`
 
-### 1. Novo fluxo de importacao com mapeamento de colunas
+```text
+InventoryCount (registro de inventario)
+  - id, code, name
+  - method: CONTAGEM_RAPIDA | CONTAGEM_CEGA | DUPLA_CONFERENCIA | RASTREABILIDADE_COMPLETA
+  - status: PLANEJADO | EM_ANDAMENTO | CONTAGEM_FINALIZADA | AJUSTADO | CANCELADO
+  - scope: GERAL | SETOR | CURVA_ABC | PRODUTOS_ESPECIFICOS
+  - sectorFilter?: string (shelf/category filter)
+  - curveFilter?: 'A' | 'B' | 'C'
+  - items: InventoryCountItem[]
+  - collaborator: string
+  - scheduledDate?: string
+  - startedAt?, completedAt?
+  - observations?: string
+  - createdAt, updatedAt
 
-Substituir o import direto atual por um fluxo multi-etapa (similar ao `ImportDialog` de produtos):
+InventoryCountItem (item individual da contagem)
+  - productId, productCode, productDescription
+  - expectedQty (estoque fisico atual no momento da contagem)
+  - expectedQtyOmie (estoque OMIE)
+  - countedQty?: number (preenchido pelo operador)
+  - secondCountQty?: number (para dupla conferencia)
+  - divergence?: number (countedQty - expectedQty)
+  - divergencePercent?: number
+  - adjustmentApplied: boolean
+  - causeAnalysis?: string (para metodo completo)
+  - status: PENDENTE | CONTADO | DIVERGENTE | AJUSTADO
 
-1. **Upload** - Usuario seleciona o arquivo .xlsx/.xls/.csv
-2. **Mapeamento** - Sistema auto-detecta as colunas e permite ajuste manual. Campos mapeados:
-   - Codigo do Produto Acabado (obrigatorio)
-   - Descricao do Produto Acabado (obrigatorio)
-   - Codigo do Item/Insumo (obrigatorio)
-   - Descricao do Item/Insumo (obrigatorio)
-   - Quantidade do Item
-   - Unidade do Item
-3. **Preview** - Mostra as composicoes agrupadas com contagem de itens, status (nova/atualizar) e itens nao encontrados no cadastro
-4. **Importacao** - Executa a criacao/atualizacao das composicoes
+InventoryMethod (enum)
+  - CONTAGEM_RAPIDA: operador ve qtd atual e ajusta
+  - CONTAGEM_CEGA: operador nao ve qtd, conta "no escuro"
+  - DUPLA_CONFERENCIA: duas contagens independentes, compara
+  - RASTREABILIDADE_COMPLETA: contagem cega + analise de causa + log
 
-### 2. Logica de agrupamento automatico
+InventorySuggestion (sugestao automatica)
+  - productId, productCode
+  - reason: CURVA_A | TEMPO_SEM_CONTAGEM | DIVERGENCIA_HISTORICA | SETOR_CRITICO
+  - priority: ALTA | MEDIA | BAIXA
+  - lastCountDate?: string
+  - divergenceHistory: number
+```
 
-O interpretador ira:
-- Ler todas as linhas da planilha
-- Agrupar por "Codigo do Produto Acabado" (todas as linhas com o mesmo codigo formam UMA composicao)
-- Para cada grupo, criar uma composicao com:
-  - `code` = Codigo do Produto Acabado
-  - `name` = Descricao do Produto Acabado
-  - `items` = Lista de todos os insumos do grupo
+### Nova chave em `src/lib/storage.ts`
 
-### 3. Tratamento de itens/insumos
+- `INVENTORY_COUNTS: 'inventory_counts'`
 
-Para cada insumo listado na planilha:
-- **Se o produto existe no cadastro**: vincula pelo ID, usa dados do cadastro
-- **Se o produto NAO existe**: cria o item na composicao com os dados da planilha (codigo, descricao, quantidade, unidade) e marca visualmente como "produto nao cadastrado" no preview
+---
 
-### 4. Tratamento de composicoes duplicadas
+## Nova Pagina: `src/pages/Inventarios.tsx`
 
-- **Se a composicao ja existe no sistema** (mesmo codigo): marcar como "Atualizar" no preview — ao importar, substitui os itens da composicao existente
-- **Se e nova**: marcar como "Nova" no preview
+### Layout com Tabs
 
-### 5. Auto-deteccao de colunas
+1. **Sugestoes** - Cards com sugestoes automaticas de contagem
+2. **Nova Contagem** - Formulario para criar inventario
+3. **Em Andamento** - Contagens ativas para preenchimento
+4. **Historico** - Lista de contagens finalizadas/canceladas
 
-O sistema tentara identificar automaticamente as colunas usando palavras-chave:
-- `codigo.*produto` ou `cod.*acabado` -> Codigo do Produto Acabado
-- `descri.*produto` ou `desc.*acabado` -> Descricao do Produto Acabado
-- `codigo.*item` ou `cod.*insumo` -> Codigo do Item
-- `descri.*item` ou `desc.*insumo` -> Descricao do Item
-- `quantidade` ou `qtd` -> Quantidade
-- `unidade.*item` ou `un.*item` -> Unidade
+### Tab 1: Sugestoes Automaticas
+
+Motor de sugestoes baseado em:
+
+- **Curva A**: Produtos classificados como curva A que nao foram contados nos ultimos 30 dias
+- **Tempo sem contagem**: Qualquer produto sem contagem nos ultimos 90 dias
+- **Divergencias historicas**: Produtos que tiveram divergencia OMIE > 20% ou divergencias em contagens anteriores
+- **Setores criticos**: Enderecos com alertas ativos (capacidade excedida, multiplos locais)
+
+Cada sugestao mostra: produto, motivo, prioridade, ultima contagem, e botao "Iniciar Contagem"
+
+### Tab 2: Nova Contagem
+
+Formulario com campos selecionaveis (seguindo padrao do sistema):
+
+- **Metodo**: Dropdown com os 4 metodos (com descricao)
+- **Escopo**: GERAL | Por Setor (seleciona estante) | Por Curva ABC (A/B/C) | Produtos especificos (multi-select)
+- **Data programada**: Opcional, para cronograma
+- **Observacoes**: Campo de texto
+
+Ao criar, o sistema pre-carrega os `InventoryCountItem` baseados no escopo selecionado, capturando `expectedQty` = `currentStock` e `expectedQtyOmie` = `stockOmie` naquele momento.
+
+### Tab 3: Em Andamento
+
+Lista de contagens com status EM_ANDAMENTO ou PLANEJADO.
+
+Ao clicar em uma contagem, abre um dialog/painel com:
+
+- **Contagem Rapida**: Tabela editavel com coluna "Qtd Contada" visivel ao lado de "Qtd Esperada"
+- **Contagem Cega**: Tabela com coluna "Qtd Contada" mas SEM mostrar "Qtd Esperada" (oculta ate finalizar)
+- **Dupla Conferencia**: Duas etapas - primeira contagem, depois segunda contagem por outro operador; compara as duas
+- **Rastreabilidade Completa**: Contagem cega + campo "Analise de Causa" para cada divergencia
+
+Acoes:
+- "Finalizar Contagem" - calcula divergencias, muda status
+- "Aplicar Ajustes" - atualiza `currentStock` dos produtos divergentes e gera movimentacoes de tipo AJUSTE
+- "Cancelar"
+
+### Tab 4: Historico
+
+Tabela com contagens finalizadas. Filtros por data, metodo, escopo. Expansivel para ver itens e divergencias.
+
+---
+
+## Integracao com o Sistema
+
+### `src/hooks/useInventory.ts`
+
+Novas funcoes:
+- `addInventoryCount()` - cria contagem
+- `updateInventoryCount()` - atualiza contagem em andamento
+- `finalizeInventoryCount()` - calcula divergencias, muda status
+- `applyInventoryAdjustments()` - para cada item divergente:
+  - Atualiza `product.currentStock` = `countedQty`
+  - Cria `Movement` tipo AJUSTE com quantidade = diferenca
+- `cancelInventoryCount()`
+- `getInventorySuggestions()` - motor de sugestoes
+
+### `src/App.tsx`
+
+- Nova rota: `/inventarios` -> `<Inventarios />`
+
+### `src/components/layout/Sidebar.tsx`
+
+- Novo item: "Inventarios" com icone `ClipboardCheck`, posicionado entre "Alertas" e "Relatorios"
 
 ---
 
 ## Detalhes Tecnicos
 
-### Arquivo modificado
+### Arquivos novos
 
-**`src/pages/Composicoes.tsx`**
+| Arquivo | Descricao |
+|---------|-----------|
+| `src/pages/Inventarios.tsx` | Pagina principal com 4 tabs |
+| `src/components/inventory/InventoryCountDialog.tsx` | Dialog para executar contagem (preencher quantidades) |
+| `src/components/inventory/InventorySuggestions.tsx` | Componente de sugestoes automaticas |
 
-- Substituir a funcao `handleImport` (linhas 147-211) por um dialog multi-etapa completo
-- Criar componente `CompositionImportDialog` inline ou separado, com os seguintes estados:
-  - `upload`: selecao de arquivo
-  - `mapping`: mapeamento de colunas com auto-deteccao
-  - `preview`: tabela agrupada mostrando composicoes detectadas, quantidade de itens, status (nova/atualizar), e itens sem cadastro
-  - `done`: resultado final
+### Arquivos modificados
 
-### Fluxo de dados
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/types/inventory.ts` | Novos tipos: InventoryCount, InventoryCountItem, etc. |
+| `src/lib/storage.ts` | Nova chave INVENTORY_COUNTS |
+| `src/hooks/useInventory.ts` | Novas funcoes de inventario + estado inventoryCounts |
+| `src/App.tsx` | Rota `/inventarios` |
+| `src/components/layout/Sidebar.tsx` | Link "Inventarios" no menu |
+
+### Logica de ajuste de estoque
+
+Quando o operador aplica ajustes apos finalizar contagem:
 
 ```text
-Planilha OMIE
-  -> Leitura com XLSX.js
-  -> Auto-deteccao de colunas
-  -> Mapeamento manual (ajustavel)
-  -> Agrupamento por Codigo do Produto Acabado
-  -> Para cada grupo:
-     -> Busca produto no cadastro (por codigo)
-     -> Se existe: vincula productId
-     -> Se nao existe: usa dados da planilha (sem productId)
-  -> Preview com status nova/atualizar
-  -> Importacao: addComposition ou updateComposition
+Para cada item com divergencia:
+  diferenca = countedQty - expectedQty
+  Se diferenca > 0: Movement tipo ENTRADA, purpose AJUSTE
+  Se diferenca < 0: Movement tipo SAIDA, purpose AJUSTE
+  Atualiza product.currentStock = countedQty
 ```
 
-### Estrutura do preview
+### Cronograma rotativo
 
-A tela de preview mostrara:
+Na tab de sugestoes, o sistema calcula automaticamente quais produtos precisam de contagem com base em:
+- Curva A: a cada 30 dias
+- Curva B: a cada 60 dias
+- Curva C: a cada 90 dias
+- Sem curva definida: a cada 90 dias
 
-| Composicao | Descricao | Itens | Itens sem cadastro | Status |
-|------------|-----------|-------|--------------------|--------|
-| 0000000554 | Cir - Controlador De Automacao 3V3 | 42 | 3 | Nova |
-| 0000000555 | Outro Produto | 15 | 0 | Atualizar |
-
-Com possibilidade de expandir cada composicao para ver os itens individuais.
+A data da ultima contagem e extraida do historico de `InventoryCount` para cada produto.
 
