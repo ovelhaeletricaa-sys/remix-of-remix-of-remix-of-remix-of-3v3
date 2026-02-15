@@ -10,6 +10,7 @@ import Composicoes from "./pages/Composicoes";
 import Armazem from "./pages/Armazem";
 import Movimentacoes from "./pages/Movimentacoes";
 import Alertas from "./pages/Alertas";
+import Inventarios from "./pages/Inventarios";
 import Relatorios from "./pages/Relatorios";
 import NotFound from "./pages/NotFound";
 
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/armazem" element={<Armazem />} />
             <Route path="/movimentacoes" element={<Movimentacoes />} />
             <Route path="/alertas" element={<Alertas />} />
+            <Route path="/inventarios" element={<Inventarios />} />
             <Route path="/relatorios" element={<Relatorios />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

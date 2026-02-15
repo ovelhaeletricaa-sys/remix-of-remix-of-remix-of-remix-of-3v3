@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   STORAGE_STRUCTURES: 'inventory_storage_structures',
   COMPOSITIONS: 'inventory_compositions',
   PRODUCTION_ORDERS: 'inventory_production_orders',
+  INVENTORY_COUNTS: 'inventory_counts',
 } as const;
 
 export function getStorageItem<T>(key: string, defaultValue: T): T {

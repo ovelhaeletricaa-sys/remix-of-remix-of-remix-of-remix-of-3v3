@@ -263,3 +263,71 @@ export interface LocationHeatData {
   totalQuantity: number;
   intensity: number; // 0-100
 }
+
+// ========== INVENTORY COUNT TYPES ==========
+
+export type InventoryMethod = 'CONTAGEM_RAPIDA' | 'CONTAGEM_CEGA' | 'DUPLA_CONFERENCIA' | 'RASTREABILIDADE_COMPLETA';
+export type InventoryCountStatus = 'PLANEJADO' | 'EM_ANDAMENTO' | 'CONTAGEM_FINALIZADA' | 'AJUSTADO' | 'CANCELADO';
+export type InventoryScope = 'GERAL' | 'SETOR' | 'CURVA_ABC' | 'PRODUTOS_ESPECIFICOS';
+export type InventoryCountItemStatus = 'PENDENTE' | 'CONTADO' | 'DIVERGENTE' | 'AJUSTADO';
+export type InventorySuggestionReason = 'CURVA_A' | 'TEMPO_SEM_CONTAGEM' | 'DIVERGENCIA_HISTORICA' | 'SETOR_CRITICO';
+export type InventorySuggestionPriority = 'ALTA' | 'MEDIA' | 'BAIXA';
+
+export const INVENTORY_METHOD_LABELS: { value: InventoryMethod; label: string; description: string }[] = [
+  { value: 'CONTAGEM_RAPIDA', label: 'Contagem Rápida', description: 'Operador vê quantidade atual e ajusta' },
+  { value: 'CONTAGEM_CEGA', label: 'Contagem Cega', description: 'Operador não vê quantidade, conta "no escuro"' },
+  { value: 'DUPLA_CONFERENCIA', label: 'Dupla Conferência', description: 'Duas contagens independentes para comparação' },
+  { value: 'RASTREABILIDADE_COMPLETA', label: 'Rastreabilidade Completa', description: 'Contagem cega + análise de causa + log completo' },
+];
+
+export const INVENTORY_SCOPE_LABELS: { value: InventoryScope; label: string }[] = [
+  { value: 'GERAL', label: 'Geral (todos os produtos)' },
+  { value: 'SETOR', label: 'Por Setor (estante)' },
+  { value: 'CURVA_ABC', label: 'Por Curva ABC' },
+  { value: 'PRODUTOS_ESPECIFICOS', label: 'Produtos Específicos' },
+];
+
+export interface InventoryCountItem {
+  productId: string;
+  productCode: string;
+  productDescription: string;
+  expectedQty: number;
+  expectedQtyOmie: number;
+  countedQty?: number;
+  secondCountQty?: number;
+  divergence?: number;
+  divergencePercent?: number;
+  adjustmentApplied: boolean;
+  causeAnalysis?: string;
+  status: InventoryCountItemStatus;
+}
+
+export interface InventoryCount {
+  id: string;
+  code: string;
+  name: string;
+  method: InventoryMethod;
+  status: InventoryCountStatus;
+  scope: InventoryScope;
+  sectorFilter?: string;
+  curveFilter?: 'A' | 'B' | 'C';
+  selectedProductIds?: string[];
+  items: InventoryCountItem[];
+  collaborator: string;
+  scheduledDate?: string;
+  startedAt?: string;
+  completedAt?: string;
+  observations?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InventorySuggestion {
+  productId: string;
+  productCode: string;
+  productDescription: string;
+  reason: InventorySuggestionReason;
+  priority: InventorySuggestionPriority;
+  lastCountDate?: string;
+  divergenceHistory: number;
+}

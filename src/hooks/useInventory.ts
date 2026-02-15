@@ -10,6 +10,11 @@ import type {
   StorageStructure,
   WarehouseAlert,
   WarehouseAlertType,
+  InventoryCount,
+  InventoryCountItem,
+  InventorySuggestion,
+  InventoryMethod,
+  InventoryScope,
 } from '@/types/inventory';
 import type { Composition, ProductionOrder } from '@/types/composition';
 import { getStorageItem, setStorageItem, generateId, STORAGE_KEYS } from '@/lib/storage';
@@ -26,6 +31,7 @@ export function useInventory() {
   const [currentUser, setCurrentUser] = useState<string>('');
   const [compositions, setCompositions] = useState<Composition[]>([]);
   const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([]);
+  const [inventoryCounts, setInventoryCounts] = useState<InventoryCount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Initialize data from localStorage or seed data
@@ -83,6 +89,9 @@ export function useInventory() {
 
     const storedOrders = getStorageItem<ProductionOrder[]>(STORAGE_KEYS.PRODUCTION_ORDERS, []);
     setProductionOrders(storedOrders);
+
+    const storedInventoryCounts = getStorageItem<InventoryCount[]>(STORAGE_KEYS.INVENTORY_COUNTS, []);
+    setInventoryCounts(storedInventoryCounts);
 
     setAlerts(storedAlerts);
     setCurrentUser(storedUser);
@@ -825,6 +834,256 @@ export function useInventory() {
     };
   }, [products, locations, movements, alerts]);
 
+  // ========== INVENTORY COUNT OPERATIONS ==========
+
+  const addInventoryCount = useCallback((data: {
+    name: string;
+    method: InventoryMethod;
+    scope: InventoryScope;
+    sectorFilter?: string;
+    curveFilter?: 'A' | 'B' | 'C';
+    selectedProductIds?: string[];
+    collaborator: string;
+    scheduledDate?: string;
+    observations?: string;
+  }) => {
+    const now = new Date().toISOString();
+    const code = `INV-${Date.now().toString(36).toUpperCase()}`;
+
+    // Build items based on scope
+    let scopeProducts = [...products];
+    if (data.scope === 'SETOR' && data.sectorFilter) {
+      scopeProducts = scopeProducts.filter(p => p.location?.includes(data.sectorFilter!));
+    } else if (data.scope === 'CURVA_ABC' && data.curveFilter) {
+      scopeProducts = scopeProducts.filter(p => p.curvaABC === data.curveFilter);
+    } else if (data.scope === 'PRODUTOS_ESPECIFICOS' && data.selectedProductIds?.length) {
+      const ids = new Set(data.selectedProductIds);
+      scopeProducts = scopeProducts.filter(p => ids.has(p.id));
+    }
+
+    const items: InventoryCountItem[] = scopeProducts.map(p => ({
+      productId: p.id,
+      productCode: p.code,
+      productDescription: p.description,
+      expectedQty: p.currentStock,
+      expectedQtyOmie: p.stockOmie ?? 0,
+      adjustmentApplied: false,
+      status: 'PENDENTE' as const,
+    }));
+
+    const newCount: InventoryCount = {
+      id: generateId(),
+      code,
+      name: data.name,
+      method: data.method,
+      status: data.scheduledDate ? 'PLANEJADO' : 'EM_ANDAMENTO',
+      scope: data.scope,
+      sectorFilter: data.sectorFilter,
+      curveFilter: data.curveFilter,
+      selectedProductIds: data.selectedProductIds,
+      items,
+      collaborator: data.collaborator,
+      scheduledDate: data.scheduledDate,
+      startedAt: data.scheduledDate ? undefined : now,
+      observations: data.observations,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setInventoryCounts(prev => {
+      const updated = [newCount, ...prev];
+      setStorageItem(STORAGE_KEYS.INVENTORY_COUNTS, updated);
+      return updated;
+    });
+    return newCount;
+  }, [products]);
+
+  const updateInventoryCount = useCallback((id: string, updates: Partial<InventoryCount>) => {
+    setInventoryCounts(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c);
+      setStorageItem(STORAGE_KEYS.INVENTORY_COUNTS, updated);
+      return updated;
+    });
+  }, []);
+
+  const startInventoryCount = useCallback((id: string) => {
+    updateInventoryCount(id, { status: 'EM_ANDAMENTO', startedAt: new Date().toISOString() });
+  }, [updateInventoryCount]);
+
+  const finalizeInventoryCount = useCallback((id: string) => {
+    setInventoryCounts(prev => {
+      const updated = prev.map(count => {
+        if (count.id !== id) return count;
+        const finalizedItems = count.items.map(item => {
+          if (item.countedQty === undefined) return item;
+          const divergence = item.countedQty - item.expectedQty;
+          const divergencePercent = item.expectedQty > 0 ? (divergence / item.expectedQty) * 100 : (item.countedQty > 0 ? 100 : 0);
+          const hasDiv = divergence !== 0;
+          return {
+            ...item,
+            divergence,
+            divergencePercent,
+            status: hasDiv ? 'DIVERGENTE' as const : 'CONTADO' as const,
+          };
+        });
+        return {
+          ...count,
+          items: finalizedItems,
+          status: 'CONTAGEM_FINALIZADA' as const,
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      });
+      setStorageItem(STORAGE_KEYS.INVENTORY_COUNTS, updated);
+      return updated;
+    });
+  }, []);
+
+  const applyInventoryAdjustments = useCallback((countId: string) => {
+    const count = inventoryCounts.find(c => c.id === countId);
+    if (!count || count.status !== 'CONTAGEM_FINALIZADA') return;
+
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().slice(0, 5);
+
+    count.items.forEach(item => {
+      if (item.divergence && item.divergence !== 0 && !item.adjustmentApplied && item.countedQty !== undefined) {
+        const diff = item.countedQty - item.expectedQty;
+        // Update product stock directly
+        setProducts(prev => {
+          const updated = prev.map(p => p.id === item.productId
+            ? { ...p, currentStock: item.countedQty!, updatedAt: now.toISOString() }
+            : p
+          );
+          setStorageItem(STORAGE_KEYS.PRODUCTS, updated);
+          return updated;
+        });
+
+        // Create adjustment movement
+        const mov: Movement = {
+          id: generateId(),
+          date: dateStr,
+          time: timeStr,
+          productId: item.productId,
+          productCode: item.productCode,
+          productDescription: item.productDescription,
+          type: diff > 0 ? 'ENTRADA' : 'SAIDA',
+          quantity: Math.abs(diff),
+          origin: 'INVENTÁRIO',
+          destination: 'ESTOQUE',
+          purpose: 'AJUSTE',
+          collaborator: count.collaborator,
+          observations: `Ajuste de inventário ${count.code} - ${count.name}`,
+          createdAt: now.toISOString(),
+        };
+        setMovements(prev => {
+          const updated = [mov, ...prev];
+          setStorageItem(STORAGE_KEYS.MOVEMENTS, updated);
+          return updated;
+        });
+      }
+    });
+
+    // Mark count as adjusted
+    setInventoryCounts(prev => {
+      const updated = prev.map(c => {
+        if (c.id !== countId) return c;
+        return {
+          ...c,
+          status: 'AJUSTADO' as const,
+          items: c.items.map(item => item.divergence && item.divergence !== 0
+            ? { ...item, adjustmentApplied: true, status: 'AJUSTADO' as const }
+            : item
+          ),
+          updatedAt: now.toISOString(),
+        };
+      });
+      setStorageItem(STORAGE_KEYS.INVENTORY_COUNTS, updated);
+      return updated;
+    });
+  }, [inventoryCounts]);
+
+  const cancelInventoryCount = useCallback((id: string) => {
+    updateInventoryCount(id, { status: 'CANCELADO' });
+  }, [updateInventoryCount]);
+
+  const getInventorySuggestions = useCallback((): InventorySuggestion[] => {
+    const suggestions: InventorySuggestion[] = [];
+    const now = Date.now();
+    const DAY_MS = 86400000;
+
+    // Build last count date map from history
+    const lastCountMap = new Map<string, string>();
+    const divergenceMap = new Map<string, number>();
+    inventoryCounts
+      .filter(c => c.status === 'CONTAGEM_FINALIZADA' || c.status === 'AJUSTADO')
+      .forEach(count => {
+        count.items.forEach(item => {
+          const existing = lastCountMap.get(item.productId);
+          if (!existing || (count.completedAt && count.completedAt > existing)) {
+            lastCountMap.set(item.productId, count.completedAt || count.createdAt);
+          }
+          if (item.divergence && item.divergence !== 0) {
+            divergenceMap.set(item.productId, (divergenceMap.get(item.productId) || 0) + 1);
+          }
+        });
+      });
+
+    products.forEach(p => {
+      const lastCount = lastCountMap.get(p.id);
+      const lastCountMs = lastCount ? new Date(lastCount).getTime() : 0;
+      const daysSinceCount = lastCount ? (now - lastCountMs) / DAY_MS : Infinity;
+      const divCount = divergenceMap.get(p.id) || 0;
+
+      // Curva A: every 30 days
+      if (p.curvaABC === 'A' && daysSinceCount > 30) {
+        suggestions.push({
+          productId: p.id, productCode: p.code, productDescription: p.description,
+          reason: 'CURVA_A', priority: 'ALTA',
+          lastCountDate: lastCount, divergenceHistory: divCount,
+        });
+        return;
+      }
+
+      // Divergência histórica
+      if (divCount >= 2) {
+        suggestions.push({
+          productId: p.id, productCode: p.code, productDescription: p.description,
+          reason: 'DIVERGENCIA_HISTORICA', priority: 'ALTA',
+          lastCountDate: lastCount, divergenceHistory: divCount,
+        });
+        return;
+      }
+
+      // OMIE divergence > 20%
+      const omie = p.stockOmie ?? 0;
+      if (omie > 0 && Math.abs(p.currentStock - omie) / omie > 0.2) {
+        suggestions.push({
+          productId: p.id, productCode: p.code, productDescription: p.description,
+          reason: 'DIVERGENCIA_HISTORICA', priority: 'MEDIA',
+          lastCountDate: lastCount, divergenceHistory: divCount,
+        });
+        return;
+      }
+
+      // Time-based: B=60, C/undefined=90
+      const threshold = p.curvaABC === 'B' ? 60 : 90;
+      if (daysSinceCount > threshold) {
+        suggestions.push({
+          productId: p.id, productCode: p.code, productDescription: p.description,
+          reason: 'TEMPO_SEM_CONTAGEM',
+          priority: p.curvaABC === 'B' ? 'MEDIA' : 'BAIXA',
+          lastCountDate: lastCount, divergenceHistory: divCount,
+        });
+      }
+    });
+
+    // Sort by priority
+    const priorityOrder = { ALTA: 0, MEDIA: 1, BAIXA: 2 };
+    return suggestions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+  }, [products, inventoryCounts]);
+
   return {
     // Data
     products,
@@ -835,6 +1094,7 @@ export function useInventory() {
     storageStructures,
     compositions,
     productionOrders,
+    inventoryCounts,
     currentUser,
     isLoading,
     
@@ -873,6 +1133,15 @@ export function useInventory() {
     addProductionOrder,
     updateProductionOrder,
     cancelProductionOrder,
+    
+    // Inventory count operations
+    addInventoryCount,
+    updateInventoryCount,
+    startInventoryCount,
+    finalizeInventoryCount,
+    applyInventoryAdjustments,
+    cancelInventoryCount,
+    getInventorySuggestions,
     
     // Warehouse intelligence
     getWarehouseAlerts,
