@@ -12,6 +12,7 @@ import Movimentacoes from "./pages/Movimentacoes";
 import Alertas from "./pages/Alertas";
 import Inventarios from "./pages/Inventarios";
 import Relatorios from "./pages/Relatorios";
+import Simulacao from "./pages/Simulacao";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/alertas" element={<Alertas />} />
             <Route path="/inventarios" element={<Inventarios />} />
             <Route path="/relatorios" element={<Relatorios />} />
+            <Route path="/simulacao" element={<Simulacao />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

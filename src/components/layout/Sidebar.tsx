@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Boxes,
   ClipboardCheck,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useInventoryContext } from '@/contexts/InventoryContext';
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Movimentações', href: '/movimentacoes', icon: ArrowRightLeft },
   { name: 'Alertas', href: '/alertas', icon: Bell },
   { name: 'Inventários', href: '/inventarios', icon: ClipboardCheck },
+  { name: 'Simulação', href: '/simulacao', icon: FlaskConical },
   { name: 'Relatórios', href: '/relatorios', icon: FileBarChart },
 ];
 
