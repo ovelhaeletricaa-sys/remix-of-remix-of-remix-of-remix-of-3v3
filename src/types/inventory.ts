@@ -162,6 +162,16 @@ export interface Project {
   status: 'ATIVO' | 'CONCLUIDO' | 'CANCELADO';
 }
 
+export type AlertKanbanStatus = 'NOVO' | 'EM_ANALISE' | 'ACAO_NECESSARIA' | 'AGUARDANDO' | 'RESOLVIDO';
+
+export const ALERT_KANBAN_COLUMNS: { value: AlertKanbanStatus; label: string; color: string }[] = [
+  { value: 'NOVO', label: 'Novos', color: 'text-info' },
+  { value: 'EM_ANALISE', label: 'Em Análise', color: 'text-warning' },
+  { value: 'ACAO_NECESSARIA', label: 'Ação Necessária', color: 'text-destructive' },
+  { value: 'AGUARDANDO', label: 'Aguardando Terceiros', color: 'text-muted-foreground' },
+  { value: 'RESOLVIDO', label: 'Resolvidos', color: 'text-success' },
+];
+
 export interface Alert {
   id: string;
   productId: string;
@@ -170,6 +180,7 @@ export interface Alert {
   type: 'LOW_STOCK' | 'OUT_OF_STOCK' | 'DAMAGE' | 'LOSS' | 'OMIE_DIVERGENCE';
   message: string;
   isRead: boolean;
+  kanbanStatus: AlertKanbanStatus;
   createdAt: string;
 }
 

@@ -113,6 +113,7 @@ export function useInventory() {
           type: 'OUT_OF_STOCK',
           message: `Produto ${product.code} está sem estoque!`,
           isRead: false,
+          kanbanStatus: 'NOVO' as const,
           createdAt: new Date().toISOString(),
         });
       } else if (product.currentStock < product.minStock) {
@@ -124,6 +125,7 @@ export function useInventory() {
           type: 'LOW_STOCK',
           message: `Produto ${product.code} está abaixo do estoque mínimo (${product.currentStock}/${product.minStock})`,
           isRead: false,
+          kanbanStatus: 'NOVO' as const,
           createdAt: new Date().toISOString(),
         });
       }
@@ -142,6 +144,7 @@ export function useInventory() {
             type: 'OMIE_DIVERGENCE',
             message: `Divergência OMIE no produto ${product.code}: Físico ${product.currentStock} vs OMIE ${omieStock} (${percentDiff.toFixed(0)}%)`,
             isRead: false,
+            kanbanStatus: 'NOVO' as const,
             createdAt: new Date().toISOString(),
           });
         }
@@ -747,6 +750,14 @@ export function useInventory() {
     });
   }, []);
 
+  const updateAlertStatus = useCallback((id: string, kanbanStatus: import('@/types/inventory').AlertKanbanStatus) => {
+    setAlerts(prev => {
+      const updated = prev.map(a => a.id === id ? { ...a, kanbanStatus } : a);
+      setStorageItem(STORAGE_KEYS.ALERTS, updated);
+      return updated;
+    });
+  }, []);
+
   // Collaborator CRUD operations
   const addCollaborator = useCallback((collab: Omit<Collaborator, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
@@ -1156,6 +1167,7 @@ export function useInventory() {
     
     // Alert operations
     markAlertAsRead,
+    updateAlertStatus,
     clearAlert,
     
     // User operations
