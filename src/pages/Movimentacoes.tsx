@@ -411,7 +411,7 @@ export default function Movimentacoes() {
                 Nova Movimentação
               </Button>
             </DialogTrigger>
-            <DialogContent className={isProductionExit ? "max-w-2xl" : "max-w-lg"}>
+            <DialogContent className={isProductionExit ? "max-w-2xl max-h-[90vh] overflow-y-auto" : "max-w-lg"}>
               <DialogHeader>
                 <DialogTitle>
                   {editingMovement ? 'Editar Movimentação' : isProductionExit ? 'Saída para Produção' : 'Registrar Movimentação'}
@@ -615,8 +615,8 @@ export default function Movimentacoes() {
                     {/* Production Status */}
                     <div className="space-y-2">
                       <Label>Status da Produção</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {PRODUCTION_STATUSES.filter(s => s.value !== 'CANCELADA').map(s => (
+                      <div className="grid grid-cols-2 gap-2">
+                        {PRODUCTION_STATUSES.map(s => (
                           <button
                             key={s.value}
                             type="button"
@@ -632,6 +632,9 @@ export default function Movimentacoes() {
                           </button>
                         ))}
                       </div>
+                      {productionStatus === 'CANCELADA' && (
+                        <p className="text-xs text-warning">⚠ Ao cancelar, os itens retornarão automaticamente ao estoque.</p>
+                      )}
                     </div>
                   </>
                 ) : (

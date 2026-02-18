@@ -9,11 +9,11 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, title, subtitle }: AppLayoutProps) {
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="min-h-screen bg-background">
       <Sidebar />
-      <div className="flex flex-1 flex-col pl-[260px] overflow-hidden">
+      <div className="pl-[260px]">
         <Header title={title} subtitle={subtitle} />
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="p-8">
           {children}
         </main>
       </div>
